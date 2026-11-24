@@ -256,7 +256,7 @@ const firebaseConfig = {
   appId: "1:448546848518:web:1864497eb72e65ef3f6887"
 };
 /* App Check: Fraud Defense (reCAPTCHA Enterprise) key ID — public, safe to publish. */
-const RECAPTCHA_SITE_KEY = "6LcQYy8uAAAAAC6TI-zMELxA-HGHdk5ZBRjQ7QoM";
+const RECAPTCHA_SITE_KEY = "6LdD9C8uAAAAAGE3uDetfOKIb_3Srq1eeSJltA1z";
 const FB = "https://www.gstatic.com/firebasejs/13.2.0/";
 const { initializeApp } = await import(FB + "firebase-app.js");
 const A = await import(FB + "firebase-auth.js");
@@ -340,6 +340,7 @@ function errText(e){
   if (c === "permission-denied") return "You don't have access. Ask Wasay to add your email to the team list.";
   if (c === "unavailable") return "Can't reach the server. Check your internet.";
   const detail = m ? " [" + m.replace(/\s+/g, " ").slice(0, 260) + "]" : "";
+  if (/high demand|overloaded|UNAVAILABLE|\b50[03]\b/i.test(m)) return "Google's AI is very busy right now and the backup models were busy too. Wait a minute and drop the screenshot again.";
   if (c === "resource-exhausted" || /RESOURCE_EXHAUSTED|\b429\b|quota/i.test(m)) return "The free AI limit was reached for now. Wait a minute and try again." + detail;
   if (/app.?check|appcheck|attestation|recaptcha/i.test(c + m)) return "App Check is blocking screenshot reading." + detail;
   if (/\b404\b|NOT_FOUND|not found|is not supported/i.test(m)) return "The AI model name isn't available. Open Studio details and change the AI model." + detail;
@@ -377,18 +378,19 @@ async function setupAppCheck(){
 
 /* ---------- AI (Gemini through Firebase AI Logic) ---------- */
 let noThink = false;
-async function model(){
-  const key = S.model + (noThink ? "|plain" : "|low");
-  if (aiMod && aiMod.name === key) return aiMod.m;
+const aiCache = {};
+const FALLBACK_MODELS = ["gemini-3.6-flash", "gemini-3.8-flash-lite"];
+async function model(name){
+  name = name || S.model || DEF.model;
+  const key = name + (noThink ? "|plain" : "|low");
+  if (aiCache[key]) return aiCache[key];
   await acReady;
   const AI = await import(FB + "firebase-ai.js");
   const ai = AI.getAI(app, { backend: new AI.GoogleAIBackend() });
-  const opts = { model: S.model || DEF.model };
+  const opts = { model: name };
   // Low thinking = much faster answers; reading a screenshot doesn't need deep reasoning.
   if (!noThink && AI.ThinkingLevel) opts.generationConfig = { thinkingConfig: { thinkingLevel: AI.ThinkingLevel.LOW } };
-  const m = AI.getGenerativeModel(ai, opts, { timeout: 150000 });
-  aiMod = { name: key, m };
-  return m;
+  return (aiCache[key] = AI.getGenerativeModel(ai, opts, { timeout: 150000 }));
 }
 function fileToPart(f){
   return new Promise((res, rej) => {
@@ -398,22 +400,35 @@ function fileToPart(f){
     r.readAsDataURL(f);
   });
 }
-async function aiText(prompt, files = []){
+const isBusy = e => /\b(500|503)\b|high demand|overloaded|UNAVAILABLE|try again later/i.test(String(e && e.message));
+const isMissing = e => /\b404\b|NOT_FOUND|not found|is not supported/i.test(String(e && e.message));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function aiText(prompt, files = [], onTry){
   const parts = [{ type:"text", text: prompt }, ...(await Promise.all(files.map(fileToPart)))];
-  const t0 = Date.now();
-  try {
-    const m = await model();
-    const r = await withTimeout(m.generateContent(parts), 160000, "The AI");
-    console.info("[FW Outreach] AI answered in", Math.round((Date.now() - t0) / 1000) + "s");
-    return r.response.text().trim();
-  } catch (e){
-    console.warn("[FW Outreach] AI failed after", Math.round((Date.now() - t0) / 1000) + "s", e);
-    if (!noThink && /thinking/i.test(String(e && e.message))){ noThink = true; return aiText(prompt, files); }
-    throw e;
+  // Try the chosen model twice, then the backups, so a busy Google server doesn't stop the work.
+  const plan = [S.model || DEF.model, S.model || DEF.model, ...FALLBACK_MODELS.filter(x => x !== (S.model || DEF.model))];
+  let last;
+  for (let i = 0; i < plan.length; i++){
+    const t0 = Date.now();
+    try {
+      if (i && onTry) onTry(i, plan[i]);
+      const m = await model(plan[i]);
+      const r = await withTimeout(m.generateContent(parts), 160000, "The AI");
+      console.info("[FW Outreach] " + plan[i] + " answered in", Math.round((Date.now() - t0) / 1000) + "s");
+      return r.response.text().trim();
+    } catch (e){
+      last = e;
+      console.warn("[FW Outreach] " + plan[i] + " failed after", Math.round((Date.now() - t0) / 1000) + "s", e);
+      if (!noThink && /thinking/i.test(String(e && e.message))){ noThink = true; i--; continue; }
+      if (isBusy(e)){ await sleep(i === 0 ? 3000 : 1500); continue; }
+      if (isMissing(e) && i >= 2) continue;   // a backup model name Google doesn't offer: skip it
+      throw e;
+    }
   }
+  throw last;
 }
-async function aiJSON(prompt, files = []){
-  const t = await aiText(prompt, files);
+async function aiJSON(prompt, files = [], onTry){
+  const t = await aiText(prompt, files, onTry);
   const s = t.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
   try { return JSON.parse(s); } catch {}
   const a = s.indexOf("{"), b = s.lastIndexOf("}");
@@ -718,7 +733,7 @@ function addQ(label){
   const item = h("div", { class:"qi" }, h("span", { class:"dot" }), h("span", { text: label }));
   $("queue").prepend(item);
   while ($("queue").children.length > 6) $("queue").lastChild.remove();
-  return { done: t => { item.className = "qi done"; item.lastChild.textContent = t; }, err: t => { item.className = "qi err"; item.lastChild.textContent = t; } };
+  return { note: t => { item.lastChild.textContent = t; }, done: t => { item.className = "qi done"; item.lastChild.textContent = t; }, err: t => { item.className = "qi err"; item.lastChild.textContent = t; } };
 }
 function cleanLead(r){
   r = r && typeof r === "object" ? r : {};
@@ -744,7 +759,7 @@ async function readShots(files){
   for (let i = 0; i < groups.length; i++){
     const qi = addQ(groups.length > 1 ? `Reading screenshot ${i + 1} of ${groups.length}…` : "Reading the screenshot and writing the pitch…");
     try {
-      const lead = cleanLead(await aiJSON(leadPrompt(), groups[i]));
+      const lead = cleanLead(await aiJSON(leadPrompt(), groups[i], (n, name) => qi.note("Google is busy, trying again" + (n > 1 ? " with " + name : "") + "…")));
       const dup = leads.find(x => (lead.whatsapp && x.whatsapp === lead.whatsapp) || (lead.email && x.email && x.email.toLowerCase() === lead.email.toLowerCase()));
       if (dup) lead.notes = ("Same contact as “" + (dup.name || "another lead") + "” already in your list. " + lead.notes).trim();
       const ref = await F.addDoc(F.collection(fs, "leads"), lead);
