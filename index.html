@@ -835,7 +835,7 @@ if (firebaseConfig.apiKey.startsWith("PASTE")){
   gate("Setup needed", "Paste the fw-outreach firebaseConfig into index.html, then upload it again.");
 } else {
   app = initializeApp(firebaseConfig);
-  if (!RECAPTCHA_SITE_KEY.startsWith("PASTE")){
+  if (RECAPTCHA_SITE_KEY && !RECAPTCHA_SITE_KEY.startsWith("PASTE")){
     try {
       const AC = await import(FB + "firebase-app-check.js");
       AC.initializeAppCheck(app, { provider: new AC.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
