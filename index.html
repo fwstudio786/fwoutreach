@@ -219,6 +219,7 @@ input[type=password]{font:inherit;color:var(--fg);background:var(--panel);border
         </label>
         <label class="check"><input type="checkbox" id="samePost"> Several screenshots of the same post</label>
         <div id="queue" class="queue" aria-live="polite"></div>
+        <button id="btnJobs" class="ghost wide" type="button">Find remote jobs (free)</button>
         <button id="btnManual" class="ghost wide" type="button">Add by typing instead</button>
       </section>
       <section class="panel" aria-labelledby="howH">
@@ -775,6 +776,71 @@ async function addManual(){
   catch (e){ toast(errText(e)); }
 }
 
+/* ---------- Find remote jobs (free job boards + Gemini, no Claude usage) ---------- */
+let hunting = false;
+const JOB_WORDS = /(video|editor|editing|motion|reels?|short[- ]?form|long[- ]?form|youtube|content creator|videograph|animat|after effects|premiere|capcut|post[- ]?production)/i;
+const jobKey = (url, title, company) => (String(url || "").split(/[?#]/)[0].toLowerCase().replace(/\/+$/, "")) || ((title || "") + "|" + (company || "")).toLowerCase();
+const strip = s => String(s || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+async function fetchJobs(){
+  const out = [];
+  const addJobicy = async url => {
+    try { const r = await withTimeout(fetch(url), 15000, "The job board"); if (!r.ok) return;
+      const j = await r.json();
+      for (const x of (j.jobs || [])) out.push({ url: x.url, title: x.jobTitle, company: x.companyName, geo: x.jobGeo || "Remote", excerpt: strip(x.jobExcerpt).slice(0, 500), source: "Jobicy" });
+    } catch (e){ console.warn("[FW Outreach] Jobicy fetch failed", e); } };
+  await addJobicy("https://jobicy.com/api/v2/remote-jobs?count=50&industry=design-multimedia");
+  await addJobicy("https://jobicy.com/api/v2/remote-jobs?count=50&industry=marketing");
+  if (!out.length){
+    try { const r = await withTimeout(fetch("https://www.arbeitnow.com/api/job-board-api"), 15000, "The job board"); if (r.ok){
+      const j = await r.json();
+      for (const x of (j.data || [])) out.push({ url: x.url, title: x.title, company: x.company_name, geo: strip(x.location) || "Remote", excerpt: strip(x.description).slice(0, 500), source: "Arbeitnow" });
+    } } catch (e){ console.warn("[FW Outreach] Arbeitnow fetch failed", e); }
+  }
+  return out;
+}
+function jobCoverPrompt(j){
+  return `Write a short job-application cover note from ${S.myName}, founder of ${S.studio} (a remote video editing studio), applying to this remote job. Studio voice ("we").
+
+Job title: ${j.title}
+Company: ${j.company || "the company"}
+About: ${(j.excerpt || "").slice(0, 600)}
+
+${studioBlock()}
+
+Rules: start "Hi ${j.company || "team"} team,"; then 3-4 "• " bullets of services that fit THIS role; include the line "Our work: ${S.portfolio}"; offer a short test edit; end "Best regards,\\n${S.myName}\\n${S.studio}". English, plain text, no markdown or asterisks, about 100-140 words. Only claim the services listed above; invent nothing. Reply with only the message.`;
+}
+async function findJobs(){
+  if (!fs || !me){ toast("Sign in first."); return; }
+  if (hunting){ toast("Still finding jobs. One moment."); return; }
+  hunting = true; $("btnJobs").disabled = true;
+  const qi = addQ("Searching free job boards…");
+  let raw = [];
+  try { raw = await fetchJobs(); }
+  catch (e){ qi.err("Couldn't reach the job boards from the browser. Try again later."); hunting = false; $("btnJobs").disabled = false; return; }
+  if (!raw.length){ qi.err("The free job boards didn't respond. Try again in a bit."); hunting = false; $("btnJobs").disabled = false; return; }
+  let jobs = raw.filter(j => j.url && j.title && JOB_WORDS.test(j.title + " " + j.excerpt));
+  const seen = new Set();
+  jobs = jobs.filter(j => { const k = jobKey(j.url, j.title, j.company); if (seen.has(k)) return false; seen.add(k); return true; });
+  const have = new Set(leads.map(l => jobKey(l.profile, l.name, "")));
+  jobs = jobs.filter(j => !have.has(jobKey(j.url, j.title, j.company)));
+  if (!jobs.length){ qi.done("No new video-editing jobs on the free boards right now. (Checked " + raw.length + ".)"); hunting = false; $("btnJobs").disabled = false; return; }
+  jobs = jobs.slice(0, 6);
+  qi.done("Found " + jobs.length + " new job" + (jobs.length > 1 ? "s" : "") + ". Writing pitches…");
+  let added = 0;
+  for (let i = 0; i < jobs.length; i++){
+    const j = jobs[i];
+    const q2 = addQ("Writing pitch " + (i + 1) + " of " + jobs.length + " — " + (j.company || j.title) + "…");
+    let message = "";
+    try { message = str(await aiText(jobCoverPrompt(j), [], () => q2.note("Google is busy, trying again…")), 6000); } catch (e){ console.warn("[FW Outreach] cover note failed", e); }
+    try {
+      await F.addDoc(F.collection(fs, "leads"), cleanLead({ name: j.company || j.title, kind: "job", source: j.source, niche: str(j.title, 80), location: j.geo, profile: j.url, channel: "linkedin", subject: "Application: " + str(j.title, 160), message, notes: "Remote job from " + j.source + ". Tap Open profile for the application link." + (message ? "" : " Couldn't write a pitch automatically — tap Write message.") }));
+      added++; q2.done("Added " + (j.company || j.title));
+    } catch (e){ q2.err(errText(e)); if (e && e.code === "permission-denied") break; }
+  }
+  toast(added ? ("Added " + added + " job" + (added > 1 ? "s" : "") + " to your board") : "Nothing added");
+  hunting = false; $("btnJobs").disabled = false;
+}
+
 /* ---------- settings ---------- */
 let setT;
 function openSettings(){
@@ -927,6 +993,7 @@ if (firebaseConfig.apiKey.startsWith("PASTE")){
 $("search").addEventListener("input", e => { q = e.target.value.trim(); render(); });
 $("file").addEventListener("change", e => readShots(e.target.files));
 $("btnManual").addEventListener("click", addManual);
+$("btnJobs").addEventListener("click", findJobs);
 $("btnSettings").addEventListener("click", openSettings);
 $("back").addEventListener("click", closeSheet);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
