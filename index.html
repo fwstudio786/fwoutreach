@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FW Outreach</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: a left "add a lead" rail beside a pipeline list; each lead opens in a side sheet with its message and one-tap send. */
+:root{
+  --bg:#f2f3f5; --panel:#ffffff; --panel2:#f7f8fa; --line:#e1e4ea; --fg:#15171c; --muted:#5f6573;
+  --accent:#e2561a; --accent-fg:#ffffff; --accent-soft:#fde8dd;
+  --ok:#1d8048; --ok-soft:#ddf2e5; --warn:#a8670f; --warn-soft:#fbeed3;
+  --bad:#bf3626; --bad-soft:#f9e1dd; --info:#2a62c9; --info-soft:#e1eafb; --wa:#1a9e50; --wa-fg:#ffffff;
+  --shadow:0 18px 50px rgba(20,22,30,.16);
+  --f-display:"Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --f-body:"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#101114; --panel:#18191d; --panel2:#1f2025; --line:#2b2d33; --fg:#f0eeeb; --muted:#9a9ea8;
+  --accent:#ff7a36; --accent-fg:#1b0c04; --accent-soft:#3a2115;
+  --ok:#4cc47f; --ok-soft:#14301f; --warn:#e5a849; --warn-soft:#382a12;
+  --bad:#f06c5c; --bad-soft:#3b1814; --info:#79a6ff; --info-soft:#17244a; --wa:#2fc46a; --wa-fg:#06210f;
+  --shadow:0 18px 50px rgba(0,0,0,.55); color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#101114; --panel:#18191d; --panel2:#1f2025; --line:#2b2d33; --fg:#f0eeeb; --muted:#9a9ea8;
+  --accent:#ff7a36; --accent-fg:#1b0c04; --accent-soft:#3a2115;
+  --ok:#4cc47f; --ok-soft:#14301f; --warn:#e5a849; --warn-soft:#382a12;
+  --bad:#f06c5c; --bad-soft:#3b1814; --info:#79a6ff; --info-soft:#17244a; --wa:#2fc46a; --wa-fg:#06210f;
+  --shadow:0 18px 50px rgba(0,0,0,.55); color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:26px;font-weight:700}
+h1 span{color:var(--accent)}
+h2{font-size:16px;font-weight:600}
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.sub{margin:2px 0 0;color:var(--muted)}
+button,.btn{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:8px 14px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;line-height:1.3}
+button:hover,.btn:hover{border-color:var(--muted)}
+button:focus-visible,.btn:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,.lead:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.55;cursor:default}
+.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.primary:hover{border-color:var(--accent);filter:brightness(1.05)}
+.wa{background:var(--wa);border-color:var(--wa);color:var(--wa-fg)}
+.wa:hover{border-color:var(--wa);filter:brightness(1.05)}
+.ghost{background:transparent}
+.wide{width:100%}
+.danger{color:var(--bad)}
+.danger.armed{background:var(--bad);border-color:var(--bad);color:#fff}
+
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border-radius:999px;padding:6px 12px;white-space:nowrap;flex:none}
+.tab b{font-variant-numeric:tabular-nums;margin-left:4px;color:var(--muted);font-weight:600}
+.tab[aria-pressed="true"]{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.tab[aria-pressed="true"] b{color:inherit;opacity:.75}
+.tab.due b{color:var(--warn)}
+.tab.due[aria-pressed="true"] b{color:inherit}
+
+.grid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:820px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+aside.add{display:flex;flex-direction:column;gap:14px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:820px){aside.add{position:static}}
+.drop{border:1.5px dashed var(--line);border-radius:12px;padding:22px 14px;text-align:center;display:flex;flex-direction:column;gap:4px;cursor:pointer;background:var(--panel2);transition:border-color .15s,background .15s}
+.drop strong{font-family:var(--f-display);font-size:15px}
+.drop span{color:var(--muted);font-size:13px}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop.off{cursor:default;opacity:.6}
+.drop.off:hover{border-color:var(--line);background:var(--panel2)}
+.check{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px}
+.queue{display:flex;flex-direction:column;gap:6px}
+.qi{display:flex;gap:8px;align-items:flex-start;font-size:13px;padding:8px 10px;border-radius:9px;background:var(--panel2)}
+.qi .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:6px;flex:none;animation:pulse 1.1s ease-in-out infinite}
+.qi.done .dot{background:var(--ok);animation:none}
+.qi.err .dot{background:var(--bad);animation:none}
+.qi.err{color:var(--bad)}
+@keyframes pulse{50%{opacity:.25}}
+.note{margin:0;font-size:13px;color:var(--muted);background:var(--panel2);border-radius:9px;padding:8px 10px}
+.steps{margin:0;padding-left:18px;color:var(--muted);display:flex;flex-direction:column;gap:6px;font-size:13px}
+.steps b{color:var(--fg);font-weight:600}
+
+main{display:flex;flex-direction:column;gap:10px;min-width:0}
+.listhead{display:flex;gap:8px}
+input[type=search],input[type=text],input[type=email],input[type=tel],textarea,select{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 11px;width:100%;min-width:0}
+textarea{resize:vertical;line-height:1.55}
+select{width:auto}
+#list{display:flex;flex-direction:column;gap:8px}
+.lead{width:100%;text-align:left;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border-radius:12px;background:var(--panel);border:1px solid var(--line)}
+.lead:hover{border-color:var(--muted)}
+.av{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:15px;background:var(--accent-soft);color:var(--accent)}
+.av.ch-whatsapp{background:var(--ok-soft);color:var(--ok)}
+.av.ch-email{background:var(--info-soft);color:var(--info)}
+.av.ch-linkedin{background:var(--info-soft);color:var(--info)}
+.lmain{display:flex;flex-direction:column;min-width:0}
+.lname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lmeta{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lright{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:12px;color:var(--muted);text-align:right}
+@media (max-width:480px){.lead{grid-template-columns:36px minmax(0,1fr)}.av{width:36px;height:36px}.lright{grid-column:2;flex-direction:row;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:8px}}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.st-new{background:var(--accent-soft);color:var(--accent)}
+.st-sent{background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
+.st-due{background:var(--warn-soft);color:var(--warn)}
+.st-replied{background:var(--info-soft);color:var(--info)}
+.st-won{background:var(--ok-soft);color:var(--ok)}
+.st-lost{background:var(--bad-soft);color:var(--bad)}
+.tag{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.empty{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:28px 20px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:6px;align-items:center}
+.empty strong{font-family:var(--f-display);color:var(--fg);font-size:16px}
+
+.back{position:fixed;inset:0;background:rgba(10,11,14,.42);z-index:20}
+.sheet{position:fixed;top:0;right:0;bottom:0;width:min(580px,100%);background:var(--panel);border-left:1px solid var(--line);box-shadow:var(--shadow);z-index:21;display:flex;flex-direction:column;animation:slide .2s ease-out}
+@keyframes slide{from{transform:translateX(24px);opacity:.4}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}.qi .dot{animation:none}}
+.sh-head{display:flex;gap:10px;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 14px) max(18px,env(safe-area-inset-right,0px)) 12px 18px;border-bottom:1px solid var(--line)}
+.sh-head input{font-family:var(--f-display);font-size:19px;font-weight:600;border-color:transparent;background:transparent;padding:4px 6px}
+.sh-head input:hover{border-color:var(--line)}
+.sh-body{flex:1;overflow:auto;padding:16px max(18px,env(safe-area-inset-right,0px)) 24px 18px;display:flex;flex-direction:column;gap:16px}
+.sh-foot{border-top:1px solid var(--line);padding:12px max(18px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 12px) 18px;display:flex;gap:8px;flex-wrap:wrap;background:var(--panel)}
+.sh-foot > *{flex:1 1 auto}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:480px){.fields{grid-template-columns:minmax(0,1fr)}}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld > span{font-size:12px;color:var(--muted);font-weight:500}
+.fld.full{grid-column:1/-1}
+.msg{min-height:300px;font-size:14px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border-radius:999px;padding:4px 10px;font-size:12.5px}
+.sec{display:flex;flex-direction:column;gap:8px}
+.sec-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.hint{color:var(--muted);font-size:12.5px;margin:0}
+.callout{border-radius:10px;padding:10px 12px;background:var(--panel2);border:1px solid var(--line);font-size:13px;white-space:pre-wrap}
+.callout.warn{background:var(--warn-soft);border-color:transparent;color:var(--fg)}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:40;font-weight:500;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+
+<style>
+html,body{margin:0}
+[hidden]{display:none!important}
+.userbox{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+.userbox b{color:var(--fg);font-weight:600}
+.auth{min-height:100vh;display:grid;place-items:center;padding-block:32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.authcard{width:min(400px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 22px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
+.authcard h1{font-size:28px}
+.authcard p{margin:0;color:var(--muted)}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.pw{position:relative}
+input[type=password]{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 11px;width:100%;min-width:0}
+.pw{display:block}
+.pw input{padding-right:64px}
+.pw button{position:absolute;right:5px;top:50%;transform:translateY(-50%);padding:4px 9px;font-size:12px;border-radius:7px}
+.link{background:none;border:0;padding:0;color:var(--accent);font-weight:500;text-decoration:underline;text-underline-offset:2px}
+.link:hover{border:0}
+.err{color:var(--bad);font-size:13px;margin:0}
+.ok{color:var(--ok);font-size:13px;margin:0}
+.by{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- sign in -->
+<div id="authView" class="auth" hidden>
+  <form id="authForm" class="authcard" novalidate>
+    <h1><span style="color:var(--accent)">FW</span> Outreach</h1>
+    <p id="authLead">Sign in to see the studio's leads.</p>
+    <button type="button" id="btnGoogle" class="wide">Continue with Google</button>
+    <div class="or">or with email</div>
+    <label class="fld"><span>Email</span><input id="aEmail" type="email" autocomplete="email" required></label>
+    <label class="fld"><span>Password</span><span class="pw"><input id="aPass" type="password" autocomplete="current-password" minlength="6" required><button type="button" id="btnShowPw" class="ghost" aria-label="Show password">Show</button></span></label>
+    <button type="submit" id="btnEmail" class="primary wide">Sign in</button>
+    <p id="authMsg" class="err" hidden></p>
+    <div class="row" style="justify-content:space-between">
+      <button type="button" id="btnMode" class="link">Create an account</button>
+      <button type="button" id="btnReset" class="link">Forgot password?</button>
+    </div>
+  </form>
+</div>
+
+<!-- signed in but blocked (not verified / not on team) -->
+<div id="gateView" class="auth" hidden>
+  <div class="authcard">
+    <h1 id="gateTitle">Almost there</h1>
+    <p id="gateText"></p>
+    <button type="button" id="gateAction" class="primary wide" hidden></button>
+    <button type="button" id="gateOut" class="ghost wide">Sign out</button>
+  </div>
+</div>
+
+<!-- app -->
+<div id="appView" hidden>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1><span>FW</span> Outreach</h1>
+      <p class="sub">Drop a screenshot, get the pitch, send it in one tap.</p>
+    </div>
+    <div class="userbox"><span>Signed in as <b id="meName"></b></span><button id="btnSettings" class="ghost" type="button">Studio details</button><button id="btnOut" class="ghost" type="button">Sign out</button></div>
+  </header>
+
+  <nav id="tabs" class="tabs" aria-label="Filter leads"></nav>
+
+  <div class="grid">
+    <aside class="add">
+      <section class="panel" aria-labelledby="addH">
+        <h2 id="addH">Add a lead</h2>
+        <label id="drop" class="drop" for="file">
+          <input id="file" type="file" accept="image/*" multiple class="sr">
+          <strong>Drop screenshots here</strong>
+          <span>Tap to choose, or paste with Ctrl+V. Instagram profiles, job posts and LinkedIn posts all work.</span>
+        </label>
+        <label class="check"><input type="checkbox" id="samePost"> Several screenshots of the same post</label>
+        <div id="queue" class="queue" aria-live="polite"></div>
+        <button id="btnManual" class="ghost wide" type="button">Add by typing instead</button>
+      </section>
+      <section class="panel" aria-labelledby="howH">
+        <h2 id="howH">How it works</h2>
+        <ol class="steps">
+          <li><b>Drop a screenshot.</b> The name, number and email are read for you and a pitch is written for that business.</li>
+          <li><b>Check the message</b>, edit it or tap a quick rewrite.</li>
+          <li><b>Tap Open in WhatsApp or Gmail.</b> The message is already filled in. You press send there.</li>
+          <li><b>Mark it sent.</b> It moves to Follow up after a few days if they haven't replied.</li>
+        </ol>
+      </section>
+    </aside>
+
+    <main>
+      <div class="listhead"><input id="search" type="search" placeholder="Search name, niche, number or email" aria-label="Search leads"></div>
+      <div id="list"></div>
+      <div id="empty" class="empty" hidden></div>
+    </main>
+  </div>
+</div>
+</div>
+
+<div id="back" class="back" hidden></div>
+<section id="sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-label="Lead"></section>
+<div id="toast" class="toast" hidden role="status"></div>
+
+<script type="module">
+/* ====== Firebase project: fw-outreaching (public web config, safe to publish) ====== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCdH7mQ_jOqwasyMptgLRngRTsf7iFdj98",
+  authDomain: "fw-outreaching.firebaseapp.com",
+  projectId: "fw-outreaching",
+  storageBucket: "fw-outreaching.firebasestorage.app",
+  messagingSenderId: "448546848518",
+  appId: "1:448546848518:web:1864497eb72e65ef3f6887"
+};
+/* App Check: Fraud Defense (reCAPTCHA Enterprise) key ID — public, safe to publish. */
+const RECAPTCHA_SITE_KEY = "6LffNS8uAAAAAO2qCksoci-TdH-dkxciuIGbkuYC";
+const FB = "https://www.gstatic.com/firebasejs/13.2.0/";
+const { initializeApp } = await import(FB + "firebase-app.js");
+const A = await import(FB + "firebase-auth.js");
+const F = await import(FB + "firebase-firestore.js");
+
+const DEF = {
+  myName: "Wasay Ahmed",
+  studio: "FW Studio",
+  portfolio: "https://fwstudio786.github.io/",
+  services: "Short-form reels and TikToks; YouTube and long-form edits; talking-head videos with B-roll and animated captions (English and Urdu); Meta and TikTok ad creatives, UGC-style ads and product demos; colour grading; motion graphics; sound design; AI videos; social media designs",
+  rates: "Simple edit PKR 2,000 per video. Premium edit (advanced transitions, grading, motion graphics) PKR 2,500–3,000 per video. Delivery 2–3 videos per day.",
+  followDays: 3,
+  voice: "",
+  model: "gemini-3.8-flash"
+};
+let S = { ...DEF };
+let app, auth, fs, aiMod = null, me = null, meName = "";
+let leads = [], loaded = false, loadErr = "", filter = "all", q = "", openId = null, sheetMode = null;
+let unsubLeads = null, unsubSet = null;
+const pend = {}, undoMsg = {};
+const DAY = 864e5;
+const $ = id => document.getElementById(id);
+const STAGES = [["all","All"],["new","To send"],["due","Follow up"],["sent","Waiting"],["replied","Replied"],["won","Won"],["lost","Lost"]];
+const STATUS = [["new","To send"],["sent","Sent"],["replied","Replied"],["won","Won"],["lost","Lost"]];
+const CH = { whatsapp:"WhatsApp", email:"Email", linkedin:"LinkedIn", instagram:"Instagram DM" };
+const show = v => { for (const id of ["authView","gateView","appView"]) $(id).hidden = id !== v; };
+
+/* ---------- helpers ---------- */
+function h(tag, props, ...kids){
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})){
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "text") el.textContent = v;
+    else if (k === "value") el.value = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()){ if (c == null || c === false) continue; el.append(c instanceof Node ? c : document.createTextNode(String(c))); }
+  return el;
+}
+const str = (v, n) => String(v ?? "").trim().slice(0, n);
+function normNum(s){
+  let d = String(s || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.length === 11 && d.startsWith("03")) d = "92" + d.slice(1);
+  if (d.length === 10 && d.startsWith("3")) d = "92" + d;
+  return d;
+}
+function stage(l){ const s = l.status || "new"; return (s === "sent" && l.followUpAt && l.followUpAt <= Date.now()) ? "due" : s; }
+const stageLabel = s => ({ new:"To send", sent:"Waiting", due:"Follow up", replied:"Replied", won:"Won", lost:"Lost" })[s] || s;
+function ago(t){
+  if (!t) return "";
+  const m = Math.round((Date.now() - t) / 6e4);
+  if (m < 1) return "just now"; if (m < 60) return m + "m ago";
+  const hr = Math.round(m / 60); if (hr < 24) return hr + "h ago";
+  return Math.round(hr / 24) + "d ago";
+}
+function inDays(t){ const d = Math.ceil((t - Date.now()) / DAY); return d <= 0 ? "today" : d === 1 ? "tomorrow" : "in " + d + " days"; }
+function initials(n){ const w = String(n || "?").replace(/[^\p{L}\p{N} ]/gu, "").trim().split(/\s+/); return ((w[0]||"?")[0] + ((w[1]||"")[0]||"")).toUpperCase(); }
+function profileUrl(l){
+  const p = String(l.profile || "").trim();
+  if (/^https:\/\//i.test(p)) return p;
+  const handle = p.replace(/^@/, "");
+  if (handle && /^[A-Za-z0-9._]{2,40}$/.test(handle) && l.channel !== "linkedin" && !/linkedin/i.test(l.source || "")) return "https://www.instagram.com/" + handle + "/";
+  return "";
+}
+const waLink = (num, text) => "https://wa.me/" + num + (text ? "?text=" + encodeURIComponent(text) : "");
+const gmailLink = (to, su, body) => "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(to || "") + "&su=" + encodeURIComponent(su || "") + "&body=" + encodeURIComponent(body || "");
+
+let toastT;
+function toast(msg){ const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3000); }
+function copy(text, label){
+  if (!text){ toast("Nothing to copy yet"); return; }
+  try { navigator.clipboard.writeText(text).then(() => toast(label + " copied"), () => toast("Copy is blocked. Select the text and copy it.")); }
+  catch { toast("Copy is blocked. Select the text and copy it."); }
+}
+function errText(e){
+  const c = String((e && e.code) || ""), m = String((e && e.message) || "");
+  if (c === "permission-denied") return "You don't have access. Ask Wasay to add your email to the team list.";
+  if (c === "unavailable") return "Can't reach the server. Check your internet.";
+  if (c === "resource-exhausted" || /quota|429|RESOURCE_EXHAUSTED/i.test(m)) return "The free AI limit was reached for now. Wait a minute and try again.";
+  if (/api-not-enabled|firebasevertexai|AI Logic|SERVICE_DISABLED|has not been used/i.test(c + m)) return "Screenshot reading isn't switched on yet. In Firebase, open Build → AI Logic → Get started and choose Gemini Developer API.";
+  if (/not found|NOT_FOUND|is not supported|model/i.test(m) && /gemini/i.test(m)) return "The AI model name isn't available. Open Studio details and change the AI model.";
+  if (/app.?check|appcheck|attestation/i.test(c + m)) return "Screenshot reading is blocked by App Check. Make sure fwstudio786.github.io is added to the Fraud Defense key's domains, then reload.";
+  if (/blocked|SAFETY/i.test(m)) return "The AI wouldn't read this one. Add the lead by typing instead.";
+  if (c === "bad-json") return "The AI answer came back in the wrong format. Try again.";
+  if (/network|fetch/i.test(m)) return "Network problem. Check your internet and try again.";
+  return "Something went wrong. Try again." + (m ? " (" + m.slice(0, 120) + ")" : "");
+}
+
+/* ---------- AI (Gemini through Firebase AI Logic) ---------- */
+async function model(){
+  if (aiMod && aiMod.name === S.model) return aiMod.m;
+  const AI = await import(FB + "firebase-ai.js");
+  const ai = AI.getAI(app, { backend: new AI.GoogleAIBackend() });
+  const m = AI.getGenerativeModel(ai, { model: S.model || DEF.model });
+  aiMod = { name: S.model, m };
+  return m;
+}
+function fileToPart(f){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res({ type:"inlineData", inlineData:{ mimeType: f.type || "image/png", data: String(r.result).split(",")[1] } });
+    r.onerror = () => rej(new Error("Couldn't read that file"));
+    r.readAsDataURL(f);
+  });
+}
+async function aiText(prompt, files = []){
+  const m = await model();
+  const parts = [{ type:"text", text: prompt }, ...(await Promise.all(files.map(fileToPart)))];
+  const r = await m.generateContent(parts);
+  return r.response.text().trim();
+}
+async function aiJSON(prompt, files = []){
+  const t = await aiText(prompt, files);
+  const s = t.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  try { return JSON.parse(s); } catch {}
+  const a = s.indexOf("{"), b = s.lastIndexOf("}");
+  if (a >= 0 && b > a){ try { return JSON.parse(s.slice(a, b + 1)); } catch {} }
+  throw { code:"bad-json", message:"" };
+}
+
+/* ---------- saving ---------- */
+const leadDoc = id => F.doc(fs, "leads", id);
+function queueSave(id, patch, delay = 600){
+  const p = pend[id] || (pend[id] = { patch:{}, timer:0, chain:Promise.resolve() });
+  Object.assign(p.patch, patch);
+  const l = leads.find(x => x.id === id); if (l) Object.assign(l, patch);
+  clearTimeout(p.timer);
+  p.timer = setTimeout(() => flush(id), delay);
+}
+function flush(id){
+  const p = pend[id]; if (!p) return Promise.resolve();
+  clearTimeout(p.timer);
+  if (!Object.keys(p.patch).length) return p.chain;
+  const patch = { ...p.patch, updatedBy: meName, updatedAt: Date.now() }; p.patch = {};
+  p.chain = p.chain.then(() => F.updateDoc(leadDoc(id), patch)).catch(e => toast(errText(e)));
+  return p.chain;
+}
+async function saveNow(id, patch){ queueSave(id, patch, 0); await flush(id); render(); }
+
+/* ---------- list ---------- */
+function counts(){ const c = { all: leads.length }; for (const l of leads) c[stage(l)] = (c[stage(l)] || 0) + 1; return c; }
+function renderTabs(){
+  const c = counts(), nav = $("tabs"); nav.textContent = "";
+  for (const [k, label] of STAGES) nav.append(h("button", { type:"button", class:"tab" + (k === "due" ? " due" : ""), "aria-pressed": String(filter === k), onclick:() => { filter = k; render(); } }, label, h("b", { text: String(c[k] || 0) })));
+}
+function visible(){
+  const qq = q.toLowerCase();
+  let out = leads.filter(l => filter === "all" || stage(l) === filter);
+  if (qq) out = out.filter(l => [l.name,l.niche,l.location,l.whatsapp,l.email,l.notes,l.profile].join(" ").toLowerCase().includes(qq));
+  const rank = { due:0, new:1, replied:2, sent:3, won:4, lost:5 };
+  out.sort((a, b) => filter === "due" ? (a.followUpAt||0) - (b.followUpAt||0)
+    : filter === "all" ? (rank[stage(a)] - rank[stage(b)]) || (b.createdAt||0) - (a.createdAt||0)
+    : (b.sentAt||b.createdAt||0) - (a.sentAt||a.createdAt||0));
+  return out;
+}
+function render(){
+  if ($("appView").hidden) return;
+  renderTabs();
+  const list = $("list"), empty = $("empty");
+  list.textContent = ""; empty.textContent = "";
+  if (!loaded){
+    empty.hidden = false;
+    empty.append(h("strong", { text: loadErr ? "Your leads can't be reached" : "Loading your leads…" }), loadErr ? h("span", { text: loadErr }) : null);
+    return;
+  }
+  const v = visible();
+  if (!v.length){
+    empty.hidden = false;
+    if (!leads.length) empty.append(h("strong", { text:"No leads yet" }), h("span", { text:"Drop a screenshot of an Instagram profile or a job post, and the pitch is written for you." }));
+    else if (q) empty.append(h("strong", { text:"Nothing matches “" + q + "”" }));
+    else empty.append(h("strong", { text: filter === "due" ? "No follow-ups due" : "Nothing here yet" }), h("span", { text: filter === "due" ? "Leads you've messaged show up here " + S.followDays + " days later if they haven't replied." : "Leads move here as you update them." }));
+    return;
+  }
+  empty.hidden = true;
+  for (const l of v){
+    const st = stage(l);
+    const when = st === "new" ? "Added " + ago(l.createdAt) : st === "due" ? "Sent " + ago(l.sentAt) : st === "sent" ? "Follow up " + inDays(l.followUpAt) : l.sentAt ? "Sent " + ago(l.sentAt) : "";
+    list.append(h("button", { type:"button", class:"lead", onclick:() => openLead(l.id) },
+      h("span", { class:"av ch-" + (l.channel||""), "aria-hidden":"true", text: initials(l.name) }),
+      h("span", { class:"lmain" },
+        h("span", { class:"lname", text: l.name || "Unnamed lead" }),
+        h("span", { class:"lmeta", text: [l.kind === "job" ? "Job post" : null, l.niche, l.location].filter(Boolean).join(" · ") || "No details yet" })),
+      h("span", { class:"lright" },
+        h("span", { class:"pill st-" + st, text: stageLabel(st) }),
+        h("span", { text: [CH[l.channel], when, l.sentBy && st !== "new" ? "by " + l.sentBy.split(" ")[0] : null].filter(Boolean).join(" · ") }))));
+  }
+}
+
+/* ---------- lead sheet ---------- */
+function closeSheet(){
+  if (openId) flush(openId);
+  openId = null; sheetMode = null;
+  $("sheet").hidden = true; $("back").hidden = true; $("sheet").textContent = "";
+  render();
+}
+function openLead(id){ openId = id; sheetMode = "lead"; renderSheet(); }
+function field(l, key, label, opts = {}){
+  const el = h(opts.area ? "textarea" : "input", { id:"f-" + key, "data-f": key, type: opts.area ? null : (opts.type || "text"), rows: opts.rows || null, placeholder: opts.ph || null, value: l[key] || "",
+    oninput: e => { const v = e.target.value; queueSave(l.id, { [key]: key === "whatsapp" ? normNum(v) : v }); refreshFoot(); },
+    onchange: e => { if (key === "whatsapp"){ const n = normNum(e.target.value); e.target.value = n ? "+" + n : ""; } flush(l.id); } });
+  if (key === "whatsapp" && l.whatsapp) el.value = "+" + l.whatsapp;
+  return h("label", { class:"fld" + (opts.full ? " full" : "") }, h("span", { text: label }), el);
+}
+function renderSheet(){
+  const l = leads.find(x => x.id === openId), sh = $("sheet");
+  if (!l){ closeSheet(); return; }
+  const scroll = sh.querySelector(".sh-body")?.scrollTop || 0;
+  sh.textContent = ""; sh.hidden = false; $("back").hidden = false;
+  const st = stage(l);
+  const head = h("div", { class:"sh-head" },
+    h("input", { id:"f-name", "data-f":"name", type:"text", "aria-label":"Name", value: l.name || "", placeholder:"Name or business", oninput: e => queueSave(l.id, { name: e.target.value }), onchange: () => flush(l.id) }),
+    h("button", { type:"button", class:"ghost", onclick: closeSheet }, "Close"));
+  const statusSel = h("select", { id:"f-status", "aria-label":"Status", onchange: e => setStatus(l, e.target.value) },
+    STATUS.map(([k, lab]) => h("option", { value:k, selected: (l.status||"new") === k ? true : null, text: lab })));
+  const chanSel = h("select", { id:"f-channel", "aria-label":"Send by", onchange: async e => { await saveNow(l.id, { channel: e.target.value }); renderSheet(); } },
+    Object.entries(CH).map(([k, lab]) => h("option", { value:k, selected: l.channel === k ? true : null, text: lab })));
+  const body = h("div", { class:"sh-body" });
+  body.append(h("div", { class:"row" },
+    h("span", { class:"pill st-" + st, text: stageLabel(st) }),
+    h("label", { class:"row", style:"gap:6px" }, h("span", { class:"hint", text:"Status" }), statusSel),
+    h("label", { class:"row", style:"gap:6px" }, h("span", { class:"hint", text:"Send by" }), chanSel),
+    l.sentAt ? h("span", { class:"hint", text: "Sent " + ago(l.sentAt) + (l.sentBy ? " by " + l.sentBy : "") + (l.followUps ? " · " + l.followUps + " follow-up" + (l.followUps > 1 ? "s" : "") : "") }) : null));
+  if (l.notes) body.append(h("div", { class:"callout warn" }, h("span", { class:"tag", text:"Tips  " }), l.notes));
+  body.append(h("div", { class:"fields" },
+    field(l, "whatsapp", "WhatsApp number", { type:"tel", ph:"+92 300 1234567" }),
+    field(l, "email", "Email", { type:"email", ph:"name@company.com" }),
+    field(l, "niche", "Niche", { ph:"Dental clinic" }),
+    field(l, "location", "Location", { ph:"Karachi" }),
+    field(l, "profile", "Profile or handle", { ph:"@handle or https:// link", full:true })));
+
+  const msgSec = h("div", { class:"sec" });
+  const sub = (l.channel === "email" || l.channel === "linkedin") ? field(l, "subject", "Subject", { full:true }) : null;
+  const ta = h("textarea", { id:"f-message", "data-f":"message", class:"msg", "aria-label":"Message", value: l.message || "", placeholder:"The message you'll send",
+    oninput: e => { queueSave(l.id, { message: e.target.value }); refreshFoot(); }, onchange: () => flush(l.id) });
+  msgSec.append(h("div", { class:"sec-h" }, h("h3", { text:"Message" }), h("button", { type:"button", class:"ghost", id:"btnWrite", onclick: () => writeMessage(l.id) }, l.message ? "Write again" : "Write message")), sub || "", ta);
+  const custom = h("input", { id:"f-instr", type:"text", placeholder:"Or say how to change it, e.g. mention we also shoot", "aria-label":"How to change the message" });
+  msgSec.append(h("div", { class:"chips" },
+    ["Shorter","More formal","Friendlier","Roman Urdu","Add my rates"].map(c => h("button", { type:"button", class:"chip", onclick: () => rewrite(l.id, c) }, c)),
+    undoMsg[l.id] != null ? h("button", { type:"button", class:"chip ghost", onclick: () => { const prev = undoMsg[l.id]; delete undoMsg[l.id]; queueSave(l.id, { message: prev }, 0); flush(l.id); renderSheet(); } }, "Undo") : null),
+    h("form", { class:"row", style:"flex-wrap:nowrap", onsubmit: e => { e.preventDefault(); const v = custom.value.trim(); if (v) rewrite(l.id, v); } }, custom, h("button", { type:"submit" }, "Rewrite")),
+    h("p", { class:"hint", id:"aiStatus" }));
+  body.append(msgSec);
+
+  if (l.status === "sent"){
+    const fsec = h("div", { class:"sec" });
+    fsec.append(h("div", { class:"sec-h" }, h("h3", { text:"Follow-up" }), h("button", { type:"button", class:"ghost", onclick: () => writeFollow(l.id) }, l.followMsg ? "Write again" : "Write follow-up")),
+      h("p", { class:"hint", text: st === "due" ? "No reply yet. A short, friendly nudge often gets the answer." : "Due " + inDays(l.followUpAt) + ". You can send it earlier." }),
+      h("textarea", { id:"f-followMsg", "data-f":"followMsg", rows:5, "aria-label":"Follow-up message", value: l.followMsg || "", placeholder:"Tap Write follow-up, or type one",
+        oninput: e => { queueSave(l.id, { followMsg: e.target.value }); refreshFoot(); }, onchange: () => flush(l.id) }),
+      h("div", { class:"row", id:"followActions" }));
+    body.append(fsec);
+  }
+  const del = h("button", { type:"button", class:"ghost danger", onclick: async e => {
+    const b = e.currentTarget;
+    if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = "Tap again to delete"; setTimeout(() => { b.classList.remove("armed"); b.textContent = "Delete lead"; }, 3000); return; }
+    const id = l.id; closeSheet();
+    try { await F.deleteDoc(leadDoc(id)); toast("Lead deleted"); } catch (err){ toast(errText(err)); }
+  } }, "Delete lead");
+  body.append(h("div", { class:"row", style:"justify-content:space-between" },
+    h("span", { class:"hint", text: "Added " + ago(l.createdAt) + (l.createdBy ? " by " + l.createdBy : "") + (l.updatedBy && l.updatedBy !== l.createdBy ? " · last edit by " + l.updatedBy : "") }), del));
+  sh.append(head, body, h("div", { class:"sh-foot", id:"foot" }));
+  body.scrollTop = scroll;
+  refreshFoot();
+}
+function sendButtons(l, text, isFollow){
+  const out = [];
+  if (l.channel === "whatsapp" && l.whatsapp) out.push(h("a", { class:"btn wa", href: waLink(l.whatsapp, text), target:"_blank", rel:"noopener" }, "Open in WhatsApp"));
+  else if (l.channel === "email" && l.email) out.push(h("a", { class:"btn primary", href: gmailLink(l.email, isFollow ? "Re: " + (l.subject || "") : l.subject, text), target:"_blank", rel:"noopener" }, "Open in Gmail"));
+  else {
+    const p = profileUrl(l);
+    if (p) out.push(h("a", { class:"btn primary", href:p, target:"_blank", rel:"noopener" }, "Open profile"));
+    if (l.channel === "whatsapp" && !l.whatsapp) out.push(h("span", { class:"hint", text:"Add a WhatsApp number to send in one tap." }));
+    if (l.channel === "email" && !l.email) out.push(h("span", { class:"hint", text:"Add an email address to open Gmail." }));
+  }
+  out.push(h("button", { type:"button", onclick: () => copy(text, "Message") }, "Copy message"));
+  return out;
+}
+function refreshFoot(){
+  const l = leads.find(x => x.id === openId), foot = $("foot"); if (!l || !foot) return;
+  foot.textContent = "";
+  const s = l.status || "new";
+  if (s === "new"){
+    foot.append(...sendButtons(l, l.message || "", false), h("button", { type:"button", class:"ghost", onclick: () => setStatus(l, "sent") }, "Mark as sent"));
+  } else if (s === "sent"){
+    foot.append(h("button", { type:"button", class:"primary", onclick: () => setStatus(l, "replied") }, "They replied"),
+      h("button", { type:"button", class:"ghost", onclick: () => copy(l.message || "", "Original message") }, "Copy original"));
+    const fa = $("followActions");
+    if (fa){ fa.textContent = ""; if ((l.followMsg || "").trim()) fa.append(...sendButtons(l, l.followMsg, true), h("button", { type:"button", class:"ghost", onclick: () => markFollowSent(l) }, "Mark follow-up sent")); }
+  } else if (s === "replied"){
+    foot.append(h("button", { type:"button", class:"primary", onclick: () => setStatus(l, "won") }, "Won the client"),
+      h("button", { type:"button", class:"ghost", onclick: () => setStatus(l, "lost") }, "Not interested"));
+    if (l.channel === "whatsapp" && l.whatsapp) foot.append(h("a", { class:"btn wa", href: waLink(l.whatsapp, ""), target:"_blank", rel:"noopener" }, "Open chat"));
+  } else {
+    foot.append(h("button", { type:"button", class:"ghost", onclick: () => setStatus(l, "replied") }, "Move back to Replied"));
+    if (l.channel === "whatsapp" && l.whatsapp) foot.append(h("a", { class:"btn wa", href: waLink(l.whatsapp, ""), target:"_blank", rel:"noopener" }, "Open chat"));
+  }
+}
+async function setStatus(l, s){
+  const patch = { status: s };
+  if (s === "sent" && !l.sentAt){ patch.sentAt = Date.now(); patch.sentBy = meName; patch.followUpAt = Date.now() + (Number(S.followDays) || 3) * DAY; }
+  if (s === "new"){ patch.sentAt = null; patch.sentBy = null; patch.followUpAt = null; patch.followUps = 0; }
+  await saveNow(l.id, patch);
+  toast(s === "sent" ? "Marked as sent. Follow up " + inDays(l.followUpAt) + "." : "Moved to " + (STATUS.find(x => x[0] === s)?.[1] || s));
+  if (openId) renderSheet();
+}
+async function markFollowSent(l){
+  const n = (l.followUps || 0) + 1;
+  await saveNow(l.id, { followUps: n, followMsg: "", followUpAt: n >= 2 ? null : Date.now() + (Number(S.followDays) || 3) * 2 * DAY });
+  toast(n >= 2 ? "Follow-up marked sent. That's two, so no more reminders for this one." : "Follow-up marked sent");
+  renderSheet();
+}
+function syncSheet(){
+  const l = leads.find(x => x.id === openId);
+  if (!l){ closeSheet(); return; }
+  if (sheetMode !== "lead") return;
+  $("sheet").querySelectorAll("[data-f]").forEach(el => {
+    const k = el.dataset.f; if (document.activeElement === el) return;
+    if (pend[l.id] && k in pend[l.id].patch) return;
+    const v = k === "whatsapp" ? (l.whatsapp ? "+" + l.whatsapp : "") : (l[k] || "");
+    if (el.value !== v) el.value = v;
+  });
+  refreshFoot();
+}
+
+/* ---------- prompts ---------- */
+function studioBlock(){
+  return `About the studio:
+- Name: ${S.studio}. Founder who sends the messages: ${S.myName}.
+- Portfolio link: ${S.portfolio}
+- Services (only claim these): ${S.services}
+- Rates: ${S.rates || "not set. If the post asks for pricing, write [your price]."}` + (S.voice ? `\n- Extra instructions from ${S.myName}: ${S.voice}` : "");
+}
+const RULES = () => `Message rules:
+- Write as ${S.myName} from ${S.studio}, in the studio's voice ("we"), offering the studio's video editing services. For a hiring post, still pitch the studio, and answer what the post explicitly asks for (name, portfolio, availability, pricing, samples) near the top.
+- Show you looked: name one or two specific things from their post or profile (their brands, projects, services, the exact skills the ad lists).
+- Then 4 or 5 short bullet points, each starting with "• ", of services that fit THIS client (for example before/after and testimonial videos for clinics, villa walkthroughs and drone reels for real estate, UGC ads and hook variations for e-commerce, talking-head reels with captions for doctors and coaches).
+- Include the line "Our work: ${S.portfolio}" and offer a free sample edit from their own footage.
+- Contact in Pakistan: begin "Assalam o Alaikum <name>," and end with "JazakAllah,\\n${S.myName}\\n${S.studio}". Anyone else: begin "Hi <first name or team>," and end with "Best regards,\\n${S.myName}\\n${S.studio}". Write in English.
+- Never invent clients, results, numbers, years of experience, or a city for the studio. Only claim the listed services.
+- Plain text for WhatsApp or email: no markdown, no asterisks. About 120 to 220 words.`;
+const JSON_SHAPE = () => `Reply with only one JSON object, no other text:
+{"name": "person or business name", "kind": "job" or "business", "source": "Instagram" | "LinkedIn" | "Facebook" | "TikTok" | "Job site" | "Other", "niche": "2-4 words, e.g. Dental clinic", "location": "city, country, or empty", "whatsapp": "WhatsApp number as digits with country code, or empty", "phone": "any other phone number, or empty", "email": "email address, or empty", "profile": "their @handle or an https link to the profile/post, or empty", "channel": "whatsapp" | "email" | "linkedin" | "instagram", "subject": "short subject for email or LinkedIn, else empty", "message": "the full message", "notes": "one or two short practical tips for ${S.myName}: best time to send for their timezone, which samples to attach, anything in the post that looks like a scam or needs his input"}`;
+const leadPrompt = () => `You help ${S.myName}, founder of ${S.studio}, a video editing studio, win clients. The attached screenshot(s) show either a hiring post for a video editor, or a business's social profile or website.
+
+1. Read every contact detail exactly as shown, copying digits carefully: WhatsApp number, phone, email, handle, and the person's or business's name. Write Pakistani mobiles like 0300-1234567 as 923001234567; give other numbers with their country code, digits only. If a number isn't shown, leave it empty. Never guess one.
+2. Choose how to send. "whatsapp" when there is a WhatsApp number or a Pakistani mobile number. "email" when there is an email and no WhatsApp, which is the usual case for US, UK and Australian businesses (cold texting their phone lines comes across as spam). "linkedin" when a LinkedIn post asks people to DM. Otherwise "instagram".
+3. Write the message ${S.myName} will send.
+
+${studioBlock()}
+
+${RULES()}
+
+${JSON_SHAPE()}`;
+
+/* ---------- AI actions ---------- */
+function setAiStatus(t){ const el = $("aiStatus"); if (el) el.textContent = t || ""; }
+function busy(on){ document.querySelectorAll("#sheet .chip, #sheet form button, #btnWrite").forEach(b => b.disabled = on); }
+async function writeMessage(id){
+  const l = leads.find(x => x.id === id); if (!l) return;
+  await flush(id); busy(true); setAiStatus("Writing the message…");
+  const facts = { name:l.name, niche:l.niche, location:l.location, whatsapp:l.whatsapp, email:l.email, profile:l.profile, kind:l.kind, notes:l.notes, channel:l.channel };
+  try {
+    const r = await aiJSON(`You help ${S.myName}, founder of ${S.studio}, a video editing studio, win clients. Write the outreach message for this lead. Use what the details say about them; don't invent facts about them.
+
+Lead details:
+${JSON.stringify(facts, null, 1)}
+
+${studioBlock()}
+
+${RULES()}
+
+Reply with only one JSON object: {"subject": "short subject for email or LinkedIn, else empty", "message": "the full message"}`);
+    if (r && typeof r.message === "string" && r.message.trim()){
+      if (l.message) undoMsg[id] = l.message;
+      queueSave(id, { message: str(r.message, 6000), subject: str(r.subject, 200) || l.subject || "" }, 0); await flush(id);
+      setAiStatus(""); renderSheet();
+    } else setAiStatus(errText({ code:"bad-json" }));
+  } catch (e){ setAiStatus(errText(e)); }
+  finally { busy(false); }
+}
+async function rewrite(id, instr){
+  const l = leads.find(x => x.id === id); if (!l) return;
+  if (!(l.message || "").trim()){ writeMessage(id); return; }
+  await flush(id); busy(true); setAiStatus("Rewriting…");
+  const ask = instr === "Add my rates" ? "Add our rates in one or two lines, using the rates below." : instr === "Roman Urdu" ? "Rewrite it in Roman Urdu (Urdu written in English letters), keeping the bullet points and the portfolio link." : instr;
+  try {
+    const text = await aiText(`Rewrite this outreach message from ${S.myName} (${S.studio}) to ${l.name || "a potential client"}${l.niche ? " (" + l.niche + ")" : ""}.
+Instruction: ${ask}
+Keep the portfolio link and every true fact. Don't invent anything. Plain text, no markdown, no asterisks. Reply with only the new message, nothing before or after it.
+
+${studioBlock()}
+
+Message:
+${l.message}`);
+    undoMsg[id] = l.message;
+    queueSave(id, { message: str(text, 6000) }, 0); await flush(id);
+    setAiStatus(""); renderSheet();
+  } catch (e){ setAiStatus(errText(e)); }
+  finally { busy(false); }
+}
+async function writeFollow(id){
+  const l = leads.find(x => x.id === id); if (!l) return;
+  const box = $("f-followMsg"); if (box) box.value = "Writing…";
+  try {
+    const days = l.sentAt ? Math.max(1, Math.round((Date.now() - l.sentAt) / DAY)) : S.followDays;
+    const text = await aiText(`Write a short follow-up (2 to 4 sentences) that ${S.myName} from ${S.studio} sends to ${l.name || "this lead"} ${days} days after the message below got no reply${l.followUps ? " (this is follow-up number " + (l.followUps + 1) + ", so keep it extra short and give them an easy way to say no)" : ""}. Polite and not pushy. Give one small new reason to reply, such as the free sample edit or a relevant example of our work. Match the greeting style and language of the original. Plain text, no markdown. Reply with only the message.
+
+Original message:
+${l.message || "(not saved)"}`);
+    queueSave(id, { followMsg: str(text, 3000) }, 0); await flush(id);
+    renderSheet();
+  } catch (e){ if (box) box.value = l.followMsg || ""; setAiStatus(errText(e)); toast(errText(e)); }
+}
+function addQ(label){
+  const item = h("div", { class:"qi" }, h("span", { class:"dot" }), h("span", { text: label }));
+  $("queue").prepend(item);
+  while ($("queue").children.length > 6) $("queue").lastChild.remove();
+  return { done: t => { item.className = "qi done"; item.lastChild.textContent = t; }, err: t => { item.className = "qi err"; item.lastChild.textContent = t; } };
+}
+function cleanLead(r){
+  r = r && typeof r === "object" ? r : {};
+  const whatsapp = normNum(r.whatsapp);
+  const email = str(r.email, 160).replace(/\s/g, "");
+  let channel = ["whatsapp","email","linkedin","instagram"].includes(r.channel) ? r.channel : (whatsapp ? "whatsapp" : email ? "email" : "instagram");
+  if (channel === "whatsapp" && !whatsapp && email) channel = "email";
+  return {
+    name: str(r.name, 140), kind: r.kind === "job" ? "job" : "business", source: str(r.source, 40),
+    niche: str(r.niche, 80), location: str(r.location, 100), whatsapp, phone: str(r.phone, 40), email,
+    profile: str(r.profile, 240), channel, subject: str(r.subject, 200), message: str(r.message, 6000),
+    notes: str(r.notes, 1200), status: "new", createdAt: Date.now(), createdBy: meName, sentAt: null, sentBy: null, followUpAt: null, followUps: 0, followMsg: ""
+  };
+}
+let reading = false;
+async function readShots(files){
+  files = [...files].filter(f => /^image\//.test(f.type));
+  if (!files.length){ toast("Those aren't images. Drop screenshots (PNG or JPG)."); return; }
+  if (reading){ toast("Still reading the last screenshot. One moment."); return; }
+  reading = true;
+  const groups = ($("samePost").checked || files.length === 1) ? [files.slice(0, 4)] : files.slice(0, 10).map(f => [f]);
+  let lastId = null;
+  for (let i = 0; i < groups.length; i++){
+    const qi = addQ(groups.length > 1 ? `Reading screenshot ${i + 1} of ${groups.length}…` : "Reading the screenshot and writing the pitch…");
+    try {
+      const lead = cleanLead(await aiJSON(leadPrompt(), groups[i]));
+      const dup = leads.find(x => (lead.whatsapp && x.whatsapp === lead.whatsapp) || (lead.email && x.email && x.email.toLowerCase() === lead.email.toLowerCase()));
+      if (dup) lead.notes = ("Same contact as “" + (dup.name || "another lead") + "” already in your list. " + lead.notes).trim();
+      const ref = await F.addDoc(F.collection(fs, "leads"), lead);
+      lastId = ref.id;
+      qi.done("Added " + (lead.name || "a lead") + (dup ? " (already in your list)" : ""));
+    } catch (e){ qi.err(errText(e)); if (e && (e.code === "permission-denied" || /quota|429|AI Logic|SERVICE_DISABLED/i.test(String(e.message)))) break; }
+  }
+  reading = false; $("file").value = "";
+  if (groups.length === 1 && lastId) setTimeout(() => { if (leads.find(x => x.id === lastId)) openLead(lastId); }, 300);
+}
+async function addManual(){
+  try { const ref = await F.addDoc(F.collection(fs, "leads"), cleanLead({ channel:"whatsapp" })); setTimeout(() => { openLead(ref.id); $("f-name")?.focus(); }, 300); }
+  catch (e){ toast(errText(e)); }
+}
+
+/* ---------- settings ---------- */
+let setT;
+function openSettings(){
+  if (openId) flush(openId);
+  openId = null; sheetMode = "settings";
+  const sh = $("sheet"); sh.textContent = ""; sh.hidden = false; $("back").hidden = false;
+  const save = () => { clearTimeout(setT); setT = setTimeout(async () => { try { await F.setDoc(F.doc(fs, "settings", "main"), { ...S }); } catch (e){ toast(errText(e)); } }, 700); };
+  const f = (key, label, opts = {}) => h("label", { class:"fld full" }, h("span", { text: label }),
+    h(opts.area ? "textarea" : "input", { id:"s-" + key, type: opts.area ? null : (opts.type || "text"), rows: opts.rows || null, value: String(S[key] ?? ""), placeholder: opts.ph || null,
+      oninput: e => { S[key] = opts.type === "number" ? Math.max(1, Math.min(30, Number(e.target.value) || 3)) : e.target.value; save(); } }),
+    opts.hint ? h("span", { class:"hint", text: opts.hint }) : null);
+  const imp = h("input", { type:"file", accept:".json,application/json", class:"sr", id:"impFile", onchange: e => importLeads(e.target.files[0]) });
+  sh.append(
+    h("div", { class:"sh-head" }, h("h2", { style:"flex:1;font-size:19px", text:"Studio details" }), h("button", { type:"button", class:"ghost", onclick: closeSheet }, "Close")),
+    h("div", { class:"sh-body" },
+      h("p", { class:"hint", text:"Every message uses these details, for both of you. Changes save on their own." }),
+      h("div", { class:"fields" },
+        f("myName", "Name that signs the messages"),
+        f("studio", "Studio name"),
+        f("portfolio", "Portfolio link"),
+        f("services", "Services you offer", { area:true, rows:4, hint:"The AI only claims what's listed here." }),
+        f("rates", "Rates and delivery", { area:true, rows:3, hint:"Used when a post asks for pricing, or when you tap Add my rates." }),
+        f("voice", "Anything else the AI should know", { area:true, rows:3, ph:"e.g. We also shoot in Karachi. Always mention we deliver within 48 hours." }),
+        f("followDays", "Days before a follow-up", { type:"number" }),
+        f("model", "AI model", { hint:"Leave as is unless screenshots stop working. Google retires old model names from time to time." })),
+      h("div", { class:"sec" }, h("h3", { text:"Import leads" }),
+        h("p", { class:"hint", text:"Add leads from a .json file, for example the starter file Claude sent you." }),
+        h("label", { class:"btn", for:"impFile" }, "Choose a .json file"), imp)));
+}
+async function importLeads(file){
+  if (!file) return;
+  try {
+    const arr = JSON.parse(await file.text());
+    if (!Array.isArray(arr)) throw new Error("not a list");
+    let n = 0;
+    for (let i = 0; i < arr.length; i += 400){
+      const b = F.writeBatch(fs);
+      for (const r of arr.slice(i, i + 400)){
+        const { id, ...data } = r || {};
+        const ref = id && /^[\w.-]{1,100}$/.test(id) ? F.doc(fs, "leads", id) : F.doc(F.collection(fs, "leads"));
+        b.set(ref, { ...cleanLead(data), ...Object.fromEntries(Object.entries(data).filter(([k]) => ["status","sentAt","followUpAt","followUps","followMsg","createdAt","subject","message","notes","channel"].includes(k))), createdBy: data.createdBy || meName });
+        n++;
+      }
+      await b.commit();
+    }
+    toast("Imported " + n + " leads");
+  } catch (e){ toast(e && e.code ? errText(e) : "That file isn't a leads list."); }
+}
+
+/* ---------- auth ---------- */
+let signUp = false;
+function authMsg(t, ok){ const m = $("authMsg"); m.textContent = t || ""; m.hidden = !t; m.className = ok ? "ok" : "err"; }
+function authErr(e){
+  const c = String(e && e.code || "");
+  return ({
+    "auth/invalid-credential":"Wrong email or password.", "auth/wrong-password":"Wrong email or password.", "auth/user-not-found":"No account with that email. Tap Create an account.",
+    "auth/email-already-in-use":"That email already has an account. Sign in instead.", "auth/weak-password":"Use at least 6 characters for the password.",
+    "auth/invalid-email":"That email address doesn't look right.", "auth/too-many-requests":"Too many tries. Wait a few minutes.",
+    "auth/popup-closed-by-user":"", "auth/cancelled-popup-request":"", "auth/unauthorized-domain":"This website isn't allowed to sign in yet. In Firebase → Authentication → Settings → Authorized domains, add fwstudio786.github.io.",
+    "auth/operation-not-allowed":"This sign-in method is off. Turn it on in Firebase → Authentication → Sign-in method.", "auth/network-request-failed":"Network problem. Check your internet."
+  })[c] ?? ("Couldn't sign in. " + (e && e.message || ""));
+}
+function setMode(up){
+  signUp = up;
+  $("btnEmail").textContent = up ? "Create account" : "Sign in";
+  $("btnMode").textContent = up ? "I already have an account" : "Create an account";
+  $("aPass").autocomplete = up ? "new-password" : "current-password";
+  $("authLead").textContent = up ? "Create your account, then ask Wasay to add your email to the team." : "Sign in to see the studio's leads.";
+  authMsg("");
+}
+function gate(title, text, action, label){
+  show("gateView"); $("gateTitle").textContent = title; $("gateText").textContent = text;
+  const b = $("gateAction"); b.hidden = !action; b.textContent = label || ""; b.onclick = action || null;
+}
+function stopData(){ unsubLeads?.(); unsubSet?.(); unsubLeads = unsubSet = null; leads = []; loaded = false; closeSheet(); }
+
+async function onUser(u){
+  stopData();
+  me = u;
+  if (!u){ show("authView"); return; }
+  const email = (u.email || "").toLowerCase();
+  meName = u.displayName || email.split("@")[0];
+  if (!u.emailVerified){
+    gate("Check your email", "We sent a link to " + email + ". Open it to confirm your address, then come back and tap I've confirmed.",
+      async () => { await u.reload(); if (auth.currentUser.emailVerified){ await u.getIdToken(true); onUser(auth.currentUser); } else toast("Not confirmed yet. Check spam too."); }, "I've confirmed");
+    return;
+  }
+  let member = null;
+  try { member = await F.getDoc(F.doc(fs, "members", email)); }
+  catch (e){ gate("Can't check access", errText(e)); return; }
+  if (!member.exists()){
+    gate("Not on the team yet", "You're signed in as " + email + ". Ask Wasay to add this email to the team list, then reload this page.", () => location.reload(), "Reload");
+    return;
+  }
+  meName = member.data().name || meName;
+  $("meName").textContent = meName;
+  show("appView"); render();
+  const timer = setTimeout(() => { if (!loaded){ loadErr = "Still trying to reach your leads. Check your internet."; render(); } }, 10000);
+  unsubLeads = F.onSnapshot(F.collection(fs, "leads"), snap => {
+    clearTimeout(timer); loaded = true; loadErr = "";
+    leads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    for (const l of leads) if (pend[l.id]) Object.assign(l, pend[l.id].patch);
+    render();
+    if (openId && sheetMode === "lead") syncSheet();
+  }, e => { clearTimeout(timer); loadErr = errText(e); render(); });
+  unsubSet = F.onSnapshot(F.doc(fs, "settings", "main"), s => { if (s.exists() && sheetMode !== "settings") S = { ...DEF, ...s.data() }; }, () => {});
+}
+
+/* ---------- start ---------- */
+if (firebaseConfig.apiKey.startsWith("PASTE")){
+  gate("Setup needed", "Paste the fw-outreach firebaseConfig into index.html, then upload it again.");
+} else {
+  app = initializeApp(firebaseConfig);
+  if (!RECAPTCHA_SITE_KEY.startsWith("PASTE")){
+    try {
+      const AC = await import(FB + "firebase-app-check.js");
+      AC.initializeAppCheck(app, { provider: new AC.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    } catch (e){ console.warn("App Check didn't start", e); }
+  }
+  auth = A.getAuth(app);
+  fs = F.getFirestore(app);
+  A.onAuthStateChanged(auth, onUser);
+
+  $("btnGoogle").addEventListener("click", async () => {
+    authMsg("");
+    try { await A.signInWithPopup(auth, new A.GoogleAuthProvider()); }
+    catch (e){ const t = authErr(e); if (t) authMsg(t); }
+  });
+  $("authForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const email = $("aEmail").value.trim(), pass = $("aPass").value;
+    if (!email || !pass){ authMsg("Enter your email and password."); return; }
+    $("btnEmail").disabled = true;
+    try {
+      if (signUp){
+        const cred = await A.createUserWithEmailAndPassword(auth, email, pass);
+        await A.sendEmailVerification(cred.user);
+      } else await A.signInWithEmailAndPassword(auth, email, pass);
+    } catch (err){ authMsg(authErr(err)); }
+    finally { $("btnEmail").disabled = false; }
+  });
+  $("btnMode").addEventListener("click", () => setMode(!signUp));
+  $("btnReset").addEventListener("click", async () => {
+    const email = $("aEmail").value.trim();
+    if (!email){ authMsg("Type your email above first, then tap Forgot password."); return; }
+    try { await A.sendPasswordResetEmail(auth, email); authMsg("Password reset link sent to " + email + ".", true); }
+    catch (err){ authMsg(authErr(err)); }
+  });
+  $("btnShowPw").addEventListener("click", () => { const p = $("aPass"), on = p.type === "password"; p.type = on ? "text" : "password"; $("btnShowPw").textContent = on ? "Hide" : "Show"; $("btnShowPw").setAttribute("aria-label", on ? "Hide password" : "Show password"); });
+  for (const id of ["btnOut","gateOut"]) $(id).addEventListener("click", () => A.signOut(auth));
+}
+
+/* ---------- events ---------- */
+$("search").addEventListener("input", e => { q = e.target.value.trim(); render(); });
+$("file").addEventListener("change", e => readShots(e.target.files));
+$("btnManual").addEventListener("click", addManual);
+$("btnSettings").addEventListener("click", openSettings);
+$("back").addEventListener("click", closeSheet);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
+const drop = $("drop");
+["dragenter","dragover"].forEach(t => document.addEventListener(t, e => { if (!$("appView").hidden && [...(e.dataTransfer?.types || [])].includes("Files")){ e.preventDefault(); drop.classList.add("over"); } }));
+["dragleave","drop"].forEach(t => document.addEventListener(t, e => { if (t === "dragleave" && e.relatedTarget) return; drop.classList.remove("over"); }));
+document.addEventListener("drop", e => { if (!$("appView").hidden && e.dataTransfer?.files?.length){ e.preventDefault(); readShots(e.dataTransfer.files); } });
+document.addEventListener("paste", e => { if ($("appView").hidden) return; const files = [...(e.clipboardData?.files || [])].filter(f => /^image\//.test(f.type)); if (files.length){ e.preventDefault(); readShots(files); } });
+setInterval(() => { if (loaded && $("sheet").hidden) render(); }, 60000);
+</script>
+</body>
+</html>
