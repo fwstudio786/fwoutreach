@@ -339,14 +339,16 @@ function errText(e){
   const c = String((e && e.code) || ""), m = String((e && e.message) || "");
   if (c === "permission-denied") return "You don't have access. Ask Wasay to add your email to the team list.";
   if (c === "unavailable") return "Can't reach the server. Check your internet.";
-  if (c === "resource-exhausted" || /quota|429|RESOURCE_EXHAUSTED/i.test(m)) return "The free AI limit was reached for now. Wait a minute and try again.";
-  if (/api-not-enabled|firebasevertexai|AI Logic|SERVICE_DISABLED|has not been used/i.test(c + m)) return "Screenshot reading isn't switched on yet. In Firebase, open Build → AI Logic → Get started and choose Gemini Developer API.";
-  if (/not found|NOT_FOUND|is not supported|model/i.test(m) && /gemini/i.test(m)) return "The AI model name isn't available. Open Studio details and change the AI model.";
-  if (/app.?check|appcheck|attestation/i.test(c + m)) return "Screenshot reading is blocked by App Check. Make sure fwstudio786.github.io is added to the Fraud Defense key's domains, then reload.";
+  const detail = m ? " [" + m.replace(/\s+/g, " ").slice(0, 260) + "]" : "";
+  if (c === "resource-exhausted" || /RESOURCE_EXHAUSTED|\b429\b|quota/i.test(m)) return "The free AI limit was reached for now. Wait a minute and try again." + detail;
+  if (/app.?check|appcheck|attestation|recaptcha/i.test(c + m)) return "App Check is blocking screenshot reading." + detail;
+  if (/\b404\b|NOT_FOUND|not found|is not supported/i.test(m)) return "The AI model name isn't available. Open Studio details and change the AI model." + detail;
+  if (/api-not-enabled|SERVICE_DISABLED|has not been used|is disabled/i.test(c + m)) return "The AI service isn't switched on for this project yet." + detail;
+  if (/\b40[13]\b|PERMISSION_DENIED|API key|API_KEY/i.test(m)) return "The AI service refused the request." + detail;
   if (/blocked|SAFETY/i.test(m)) return "The AI wouldn't read this one. Add the lead by typing instead.";
   if (c === "bad-json") return "The AI answer came back in the wrong format. Try again.";
-  if (/network|fetch/i.test(m)) return "Network problem. Check your internet and try again.";
-  return "Something went wrong. Try again." + (m ? " (" + m.slice(0, 120) + ")" : "");
+  if (/network|fetch/i.test(m)) return "Network problem. Check your internet and try again." + detail;
+  return "Something went wrong. Try again." + detail;
 }
 
 /* ---------- AI (Gemini through Firebase AI Logic) ---------- */
@@ -710,7 +712,7 @@ async function readShots(files){
       const ref = await F.addDoc(F.collection(fs, "leads"), lead);
       lastId = ref.id;
       qi.done("Added " + (lead.name || "a lead") + (dup ? " (already in your list)" : ""));
-    } catch (e){ qi.err(errText(e)); if (e && (e.code === "permission-denied" || /quota|429|AI Logic|SERVICE_DISABLED/i.test(String(e.message)))) break; }
+    } catch (e){ qi.err(errText(e)); if (e && (e.code === "permission-denied" || /RESOURCE_EXHAUSTED|SERVICE_DISABLED|app.?check|attestation/i.test(String(e.message)))) break; }
   }
   reading = false; $("file").value = "";
   if (groups.length === 1 && lastId) setTimeout(() => { if (leads.find(x => x.id === lastId)) openLead(lastId); }, 300);
