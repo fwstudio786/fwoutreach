@@ -390,7 +390,7 @@ async function model(name){
   const opts = { model: name };
   // Low thinking = much faster answers; reading a screenshot doesn't need deep reasoning.
   if (!noThink && AI.ThinkingLevel) opts.generationConfig = { thinkingConfig: { thinkingLevel: AI.ThinkingLevel.LOW } };
-  return (aiCache[key] = AI.getGenerativeModel(ai, opts, { timeout: 150000 }));
+  return (aiCache[key] = AI.getGenerativeModel(ai, opts, { timeout: 75000 }));
 }
 function fileToPart(f){
   return new Promise((res, rej) => {
@@ -400,7 +400,7 @@ function fileToPart(f){
     r.readAsDataURL(f);
   });
 }
-const isBusy = e => /\b(500|503)\b|high demand|overloaded|UNAVAILABLE|try again later/i.test(String(e && e.message));
+const isBusy = e => /\b(500|503|504)\b|high demand|overloaded|UNAVAILABLE|try again later|took too long|timed? ?out|aborted/i.test(String(e && e.message));
 const isMissing = e => /\b404\b|NOT_FOUND|not found|is not supported/i.test(String(e && e.message));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function aiText(prompt, files = [], onTry){
@@ -413,7 +413,7 @@ async function aiText(prompt, files = [], onTry){
     try {
       if (i && onTry) onTry(i, plan[i]);
       const m = await model(plan[i]);
-      const r = await withTimeout(m.generateContent(parts), 160000, "The AI");
+      const r = await withTimeout(m.generateContent(parts), 70000, "The AI");
       console.info("[FW Outreach] " + plan[i] + " answered in", Math.round((Date.now() - t0) / 1000) + "s");
       return r.response.text().trim();
     } catch (e){
