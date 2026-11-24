@@ -346,14 +346,39 @@ function errText(e){
   if (/api-not-enabled|SERVICE_DISABLED|has not been used|is disabled/i.test(c + m)) return "The AI service isn't switched on for this project yet." + detail;
   if (/\b40[13]\b|PERMISSION_DENIED|API key|API_KEY/i.test(m)) return "The AI service refused the request." + detail;
   if (/blocked|SAFETY/i.test(m)) return "The AI wouldn't read this one. Add the lead by typing instead.";
+  if (/took too long/i.test(m)) return m + ". Try again; if it keeps happening, send Claude a screenshot." ;
   if (c === "bad-json") return "The AI answer came back in the wrong format. Try again.";
   if (/network|fetch/i.test(m)) return "Network problem. Check your internet and try again." + detail;
   return "Something went wrong. Try again." + detail;
 }
 
+/* ---------- App Check (abuse guard) ----------
+   Tries the guard on a throwaway copy of the app first. Only if Google hands back a valid
+   pass is it switched on for the real app; otherwise the site keeps working without it
+   (Firebase is set to "Monitoring", so nothing is blocked) and Studio details shows why. */
+let acReady = Promise.resolve(), acStatus = "Off (no key in the site)";
+const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + " took too long")), ms))]);
+async function setupAppCheck(){
+  if (!RECAPTCHA_SITE_KEY || RECAPTCHA_SITE_KEY.startsWith("PASTE")) return;
+  acStatus = "Checking…";
+  try {
+    const AC = await import(FB + "firebase-app-check.js");
+    const probe = initializeApp(firebaseConfig, "appcheck-probe");
+    const pac = AC.initializeAppCheck(probe, { provider: new AC.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: false });
+    const tok = await withTimeout(AC.getToken(pac, false), 15000, "The guard check");
+    if (!tok || !tok.token) throw new Error("no pass returned");
+    AC.initializeAppCheck(app, { provider: new AC.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    acStatus = "On. Google accepted this browser.";
+  } catch (e){
+    acStatus = "Not working: " + String((e && (e.code || e.message)) || e).slice(0, 200);
+    console.warn("[FW Outreach] App Check skipped:", e);
+  }
+}
+
 /* ---------- AI (Gemini through Firebase AI Logic) ---------- */
 async function model(){
   if (aiMod && aiMod.name === S.model) return aiMod.m;
+  await acReady;
   const AI = await import(FB + "firebase-ai.js");
   const ai = AI.getAI(app, { backend: new AI.GoogleAIBackend() });
   const m = AI.getGenerativeModel(ai, { model: S.model || DEF.model });
@@ -371,7 +396,7 @@ function fileToPart(f){
 async function aiText(prompt, files = []){
   const m = await model();
   const parts = [{ type:"text", text: prompt }, ...(await Promise.all(files.map(fileToPart)))];
-  const r = await m.generateContent(parts);
+  const r = await withTimeout(m.generateContent(parts), 90000, "The AI");
   return r.response.text().trim();
 }
 async function aiJSON(prompt, files = []){
@@ -747,6 +772,7 @@ function openSettings(){
         f("voice", "Anything else the AI should know", { area:true, rows:3, ph:"e.g. We also shoot in Karachi. Always mention we deliver within 48 hours." }),
         f("followDays", "Days before a follow-up", { type:"number" }),
         f("model", "AI model", { hint:"Leave as is unless screenshots stop working. Google retires old model names from time to time." })),
+      h("div", { class:"sec" }, h("h3", { text:"Abuse guard (App Check)" }), h("p", { class:"callout", text: acStatus })),
       h("div", { class:"sec" }, h("h3", { text:"Import leads" }),
         h("p", { class:"hint", text:"Add leads from a .json file, for example the starter file Claude sent you." }),
         h("label", { class:"btn", for:"impFile" }, "Choose a .json file"), imp)));
@@ -835,12 +861,7 @@ if (firebaseConfig.apiKey.startsWith("PASTE")){
   gate("Setup needed", "Paste the fw-outreach firebaseConfig into index.html, then upload it again.");
 } else {
   app = initializeApp(firebaseConfig);
-  if (RECAPTCHA_SITE_KEY && !RECAPTCHA_SITE_KEY.startsWith("PASTE")){
-    try {
-      const AC = await import(FB + "firebase-app-check.js");
-      AC.initializeAppCheck(app, { provider: new AC.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
-    } catch (e){ console.warn("App Check didn't start", e); }
-  }
+  acReady = setupAppCheck();
   auth = A.getAuth(app);
   fs = F.getFirestore(app);
   A.onAuthStateChanged(auth, onUser);
