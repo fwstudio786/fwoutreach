@@ -140,6 +140,14 @@ select{width:auto}
 .callout.warn{background:var(--warn-soft);border-color:transparent;color:var(--fg)}
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:40;font-weight:500;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.statbar{display:flex;gap:20px;padding:6px 2px;flex-wrap:wrap}
+.statbar .stat{color:var(--muted);font-size:14px}
+.statbar .stat b{color:var(--fg);font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;margin-right:3px}
+.rephead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:16px 2px 8px;padding-top:12px;border-top:1px solid var(--line)}
+.rephead:first-child{border-top:0;margin-top:2px;padding-top:0}
+.repname{font-weight:700;font-size:15px}
+.repstat{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.tab.salest[aria-pressed="true"]{background:var(--accent,#e0892f);border-color:var(--accent,#e0892f);color:#fff}
 </style>
 
 <style>
@@ -274,8 +282,13 @@ const DEF = {
   model: "gemini-3.8-flash"
 };
 let S = { ...DEF };
-let app, auth, fs, aiMod = null, me = null, meName = "";
+let app, auth, fs, aiMod = null, me = null, meName = "", myEmail = "", myRole = "owner";
 let leads = [], loaded = false, loadErr = "", filter = "all", q = "", openId = null, sheetMode = null;
+const isSales = () => myRole === "sales";
+// Owners see every lead except the sales reps' logs; a sales rep only ever has their own.
+const boardLeads = () => isSales() ? leads : leads.filter(l => l.track !== "sales");
+const salesLeads = () => leads.filter(l => l.track === "sales");
+function salesStats(arr){ const d = new Date(); d.setHours(0,0,0,0); const t0 = d.getTime(), w0 = Date.now() - 7*864e5; let today = 0, week = 0; for (const l of arr){ const c = l.createdAt || 0; if (c >= t0) today++; if (c >= w0) week++; } return { total: arr.length, today, week }; }
 let unsubLeads = null, unsubSet = null;
 const pend = {}, undoMsg = {};
 const DAY = 864e5;
@@ -457,15 +470,24 @@ function flush(id){
 async function saveNow(id, patch){ queueSave(id, patch, 0); await flush(id); render(); }
 
 /* ---------- list ---------- */
-function counts(){ const c = { all: leads.length }; for (const l of leads) c[stage(l)] = (c[stage(l)] || 0) + 1; return c; }
+function counts(){ const bl = boardLeads(); const c = { all: bl.length }; for (const l of bl) c[stage(l)] = (c[stage(l)] || 0) + 1; c.sales = salesLeads().length; return c; }
 function renderTabs(){
-  const c = counts(), nav = $("tabs"); nav.textContent = "";
-  for (const [k, label] of STAGES) nav.append(h("button", { type:"button", class:"tab" + (k === "due" ? " due" : ""), "aria-pressed": String(filter === k), onclick:() => { filter = k; render(); } }, label, h("b", { text: String(c[k] || 0) })));
+  const nav = $("tabs"); nav.textContent = "";
+  if (isSales()){
+    const s = salesStats(leads);
+    nav.append(h("div", { class:"statbar" },
+      h("span", { class:"stat" }, h("b", { text: String(s.total) }), " total"),
+      h("span", { class:"stat" }, h("b", { text: String(s.today) }), " today"),
+      h("span", { class:"stat" }, h("b", { text: String(s.week) }), " this week")));
+    return;
+  }
+  const c = counts(), tabs = [...STAGES, ["sales","Sales"]];
+  for (const [k, label] of tabs) nav.append(h("button", { type:"button", class:"tab" + (k === "due" ? " due" : "") + (k === "sales" ? " salest" : ""), "aria-pressed": String(filter === k), onclick:() => { filter = k; render(); } }, label, h("b", { text: String(c[k] || 0) })));
 }
 function visible(){
   const qq = q.toLowerCase();
-  let out = leads.filter(l => filter === "all" || stage(l) === filter);
-  if (qq) out = out.filter(l => [l.name,l.niche,l.location,l.whatsapp,l.email,l.notes,l.profile].join(" ").toLowerCase().includes(qq));
+  let out = boardLeads().filter(l => filter === "all" || stage(l) === filter);
+  if (qq) out = out.filter(l => [l.name,l.niche,l.location,l.whatsapp,l.email,l.notes,l.profile,l.username].join(" ").toLowerCase().includes(qq));
   const rank = { due:0, new:1, replied:2, sent:3, won:4, lost:5 };
   out.sort((a, b) => filter === "due" ? (a.followUpAt||0) - (b.followUpAt||0)
     : filter === "all" ? (rank[stage(a)] - rank[stage(b)]) || (b.createdAt||0) - (a.createdAt||0)
@@ -482,26 +504,65 @@ function render(){
     empty.append(h("strong", { text: loadErr ? "Your leads can't be reached" : "Loading your leads…" }), loadErr ? h("span", { text: loadErr }) : null);
     return;
   }
-  const v = visible();
+  if (!isSales() && filter === "sales"){ renderSalesView(list, empty); return; }
+  const v = isSales() ? salesVisible() : visible();
   if (!v.length){
     empty.hidden = false;
-    if (!leads.length) empty.append(h("strong", { text:"No leads yet" }), h("span", { text:"Drop a screenshot of an Instagram profile or a job post, and the pitch is written for you." }));
+    if (isSales()) empty.append(h("strong", { text: q ? "Nothing matches “" + q + "”" : "No outreach logged yet" }), q ? null : h("span", { text:"Drop a screenshot of a profile or chat, and it's logged here." }));
+    else if (!leads.length) empty.append(h("strong", { text:"No leads yet" }), h("span", { text:"Drop a screenshot of an Instagram profile or a job post, and the pitch is written for you." }));
     else if (q) empty.append(h("strong", { text:"Nothing matches “" + q + "”" }));
     else empty.append(h("strong", { text: filter === "due" ? "No follow-ups due" : "Nothing here yet" }), h("span", { text: filter === "due" ? "Leads you've messaged show up here " + S.followDays + " days later if they haven't replied." : "Leads move here as you update them." }));
     return;
   }
   empty.hidden = true;
   for (const l of v){
+    if (isSales()){
+      list.append(h("button", { type:"button", class:"lead", onclick:() => openLead(l.id) },
+        h("span", { class:"av", "aria-hidden":"true", text: initials(l.name) }),
+        h("span", { class:"lmain" },
+          h("span", { class:"lname", text: l.name || "Unnamed" }),
+          h("span", { class:"lmeta", text: [l.username, l.niche, l.location].filter(Boolean).join(" · ") || "No details" })),
+        h("span", { class:"lright" }, h("span", { text: [l.source, "Added " + ago(l.createdAt)].filter(Boolean).join(" · ") }))));
+      continue;
+    }
     const st = stage(l);
     const when = st === "new" ? "Added " + ago(l.createdAt) : st === "due" ? "Sent " + ago(l.sentAt) : st === "sent" ? "Follow up " + inDays(l.followUpAt) : l.sentAt ? "Sent " + ago(l.sentAt) : "";
     list.append(h("button", { type:"button", class:"lead", onclick:() => openLead(l.id) },
       h("span", { class:"av ch-" + (l.channel||""), "aria-hidden":"true", text: initials(l.name) }),
       h("span", { class:"lmain" },
         h("span", { class:"lname", text: l.name || "Unnamed lead" }),
-        h("span", { class:"lmeta", text: [l.kind === "job" ? "Job post" : null, l.niche, l.location].filter(Boolean).join(" · ") || "No details yet" })),
+        h("span", { class:"lmeta", text: [l.kind === "job" ? "Job post" : null, l.username, l.niche, l.location].filter(Boolean).join(" · ") || "No details yet" })),
       h("span", { class:"lright" },
         h("span", { class:"pill st-" + st, text: stageLabel(st) }),
         h("span", { text: [CH[l.channel], when, l.sentBy && st !== "new" ? "by " + l.sentBy.split(" ")[0] : null].filter(Boolean).join(" · ") }))));
+  }
+}
+function salesVisible(){
+  const qq = q.toLowerCase();
+  let out = leads.slice();
+  if (qq) out = out.filter(l => [l.name, l.username, l.niche, l.location].join(" ").toLowerCase().includes(qq));
+  out.sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
+  return out;
+}
+function renderSalesView(list, empty){
+  let all = salesLeads(); const qq = q.toLowerCase();
+  if (qq) all = all.filter(l => [l.name, l.username, l.createdBy, l.niche].join(" ").toLowerCase().includes(qq));
+  if (!all.length){ empty.hidden = false; empty.append(h("strong", { text: qq ? "Nothing matches “" + q + "”" : "No sales outreach yet" }), qq ? null : h("span", { text:"When a sales rep logs outreach, it shows up here with their counts." })); return; }
+  empty.hidden = true;
+  const byRep = new Map();
+  for (const l of all){ const key = l.ownerEmail || l.createdBy || "someone"; if (!byRep.has(key)) byRep.set(key, []); byRep.get(key).push(l); }
+  for (const [, arr] of byRep){
+    arr.sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
+    const s = salesStats(arr);
+    list.append(h("div", { class:"rephead" },
+      h("span", { class:"repname", text: arr[0].createdBy || "Sales rep" }),
+      h("span", { class:"repstat", text: s.total + " total · " + s.today + " today · " + s.week + " this week" })));
+    for (const l of arr) list.append(h("button", { type:"button", class:"lead", onclick:() => openLead(l.id) },
+      h("span", { class:"av", "aria-hidden":"true", text: initials(l.name) }),
+      h("span", { class:"lmain" },
+        h("span", { class:"lname", text: l.name || "Unnamed" }),
+        h("span", { class:"lmeta", text: [l.username, l.niche, l.location].filter(Boolean).join(" · ") || "No details" })),
+      h("span", { class:"lright" }, h("span", { text: "Added " + ago(l.createdAt) }))));
   }
 }
 
@@ -513,6 +574,26 @@ function closeSheet(){
   render();
 }
 function openLead(id){ openId = id; sheetMode = "lead"; renderSheet(); }
+// A sales rep's logged outreach: just the who, no pitch/send workflow.
+function renderSalesSheet(l, sh){
+  const head = h("div", { class:"sh-head" },
+    h("input", { id:"f-name", "data-f":"name", type:"text", "aria-label":"Name", value: l.name || "", placeholder:"Name or business", oninput: e => queueSave(l.id, { name: e.target.value }), onchange: () => flush(l.id) }),
+    h("button", { type:"button", class:"ghost", onclick: closeSheet }, "Close"));
+  const body = h("div", { class:"sh-body" },
+    field(l, "username", "Username / handle", { ph:"@handle" }),
+    field(l, "niche", "What they do", { ph:"e.g. Dental clinic" }),
+    field(l, "location", "Location", { ph:"City, country" }),
+    field(l, "notes", "Notes", { area:true, rows:3, ph:"Anything to remember" }));
+  const del = h("button", { type:"button", class:"ghost danger", onclick: async e => {
+    const b = e.currentTarget;
+    if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = "Tap again to delete"; setTimeout(() => { b.classList.remove("armed"); b.textContent = "Delete"; }, 3000); return; }
+    const id = l.id; closeSheet();
+    try { await F.deleteDoc(leadDoc(id)); toast("Deleted"); } catch (err){ toast(errText(err)); }
+  } }, "Delete");
+  body.append(h("div", { class:"row", style:"justify-content:space-between" },
+    h("span", { class:"hint", text: "Logged " + ago(l.createdAt) + (l.createdBy ? " by " + l.createdBy : "") }), del));
+  sh.append(head, body);
+}
 function field(l, key, label, opts = {}){
   const el = h(opts.area ? "textarea" : "input", { id:"f-" + key, "data-f": key, type: opts.area ? null : (opts.type || "text"), rows: opts.rows || null, placeholder: opts.ph || null, value: l[key] || "",
     oninput: e => { const v = e.target.value; queueSave(l.id, { [key]: key === "whatsapp" ? normNum(v) : v }); refreshFoot(); },
@@ -525,6 +606,7 @@ function renderSheet(){
   if (!l){ closeSheet(); return; }
   const scroll = sh.querySelector(".sh-body")?.scrollTop || 0;
   sh.textContent = ""; sh.hidden = false; $("back").hidden = false;
+  if (l.track === "sales"){ renderSalesSheet(l, sh); return; }
   const st = stage(l);
   const head = h("div", { class:"sh-head" },
     h("input", { id:"f-name", "data-f":"name", type:"text", "aria-label":"Name", value: l.name || "", placeholder:"Name or business", oninput: e => queueSave(l.id, { name: e.target.value }), onchange: () => flush(l.id) }),
@@ -658,7 +740,7 @@ const RULES = () => `Message rules:
 - Never invent clients, results, numbers, years of experience, or a city for the studio. Only claim the listed services.
 - Plain text for WhatsApp or email: no markdown, no asterisks. About 120 to 220 words.`;
 const JSON_SHAPE = () => `Reply with only one JSON object, no other text:
-{"name": "person or business name", "kind": "job" or "business", "source": "Instagram" | "LinkedIn" | "Facebook" | "TikTok" | "Job site" | "Other", "niche": "2-4 words, e.g. Dental clinic", "location": "city, country, or empty", "whatsapp": "WhatsApp number as digits with country code, or empty", "phone": "any other phone number, or empty", "email": "email address, or empty", "profile": "their @handle or an https link to the profile/post, or empty", "channel": "whatsapp" | "email" | "linkedin" | "instagram", "subject": "short subject for email or LinkedIn, else empty", "message": "the full message", "notes": "one or two short practical tips for ${S.myName}: best time to send for their timezone, which samples to attach, anything in the post that looks like a scam or needs his input"}`;
+{"name": "person or business name", "username": "their @handle or username if shown, or empty", "kind": "job" or "business", "source": "Instagram" | "LinkedIn" | "Facebook" | "TikTok" | "Job site" | "Other", "niche": "2-4 words, e.g. Dental clinic", "location": "city, country, or empty", "whatsapp": "WhatsApp number as digits with country code, or empty", "phone": "any other phone number, or empty", "email": "email address, or empty", "profile": "their @handle or an https link to the profile/post, or empty", "channel": "whatsapp" | "email" | "linkedin" | "instagram", "subject": "short subject for email or LinkedIn, else empty", "message": "the full message", "notes": "one or two short practical tips for ${S.myName}: best time to send for their timezone, which samples to attach, anything in the post that looks like a scam or needs his input"}`;
 const leadPrompt = () => `You help ${S.myName}, founder of ${S.studio}, a video editing studio, win clients. The attached screenshot(s) show either a hiring post for a video editor, or a business's social profile or website.
 
 1. Read every contact detail exactly as shown, copying digits carefully: WhatsApp number, phone, email, handle, and the person's or business's name. Write Pakistani mobiles like 0300-1234567 as 923001234567; give other numbers with their country code, digits only. If a number isn't shown, leave it empty. Never guess one.
@@ -670,6 +752,11 @@ ${studioBlock()}
 ${RULES()}
 
 ${JSON_SHAPE()}`;
+// A sales rep only logs who they reached — no pitch — so a light, fast read of just the name + handle.
+const salesPrompt = () => `Look at this screenshot — a social profile, a chat/DM, or a post. Pull out who it is.
+Reply with only one JSON object, no other text:
+{"name": "the person or business name, or empty", "username": "their @handle or username if shown, or empty", "niche": "what they do in 2-4 words, or empty", "location": "city or country if shown, or empty", "source": "Instagram" | "LinkedIn" | "Facebook" | "TikTok" | "WhatsApp" | "Other"}
+Copy names and @handles exactly as shown. Never guess. No message, no other fields.`;
 
 /* ---------- AI actions ---------- */
 function setAiStatus(t){ const el = $("aiStatus"); if (el) el.textContent = t || ""; }
@@ -745,8 +832,8 @@ function cleanLead(r){
   return {
     name: str(r.name, 140), kind: r.kind === "job" ? "job" : "business", source: str(r.source, 40),
     niche: str(r.niche, 80), location: str(r.location, 100), whatsapp, phone: str(r.phone, 40), email,
-    profile: str(r.profile, 240), channel, subject: str(r.subject, 200), message: str(r.message, 6000),
-    notes: str(r.notes, 1200), status: "new", createdAt: Date.now(), createdBy: meName, sentAt: null, sentBy: null, followUpAt: null, followUps: 0, followMsg: ""
+    profile: str(r.profile, 240), username: str(r.username, 80), channel, subject: str(r.subject, 200), message: str(r.message, 6000),
+    notes: str(r.notes, 1200), status: "new", createdAt: Date.now(), createdBy: meName, ownerEmail: myEmail, track: isSales() ? "sales" : "team", sentAt: null, sentBy: null, followUpAt: null, followUps: 0, followMsg: ""
   };
 }
 let reading = false;
@@ -758,10 +845,12 @@ async function readShots(files){
   const groups = ($("samePost").checked || files.length === 1) ? [files.slice(0, 4)] : files.slice(0, 10).map(f => [f]);
   let lastId = null;
   for (let i = 0; i < groups.length; i++){
-    const qi = addQ(groups.length > 1 ? `Reading screenshot ${i + 1} of ${groups.length}…` : "Reading the screenshot and writing the pitch…");
+    const qi = addQ(groups.length > 1 ? `Reading screenshot ${i + 1} of ${groups.length}…` : (isSales() ? "Reading the screenshot…" : "Reading the screenshot and writing the pitch…"));
     try {
-      const lead = cleanLead(await aiJSON(leadPrompt(), groups[i], (n, name) => qi.note("Google is busy, trying again" + (n > 1 ? " with " + name : "") + "…")));
-      const dup = leads.find(x => (lead.whatsapp && x.whatsapp === lead.whatsapp) || (lead.email && x.email && x.email.toLowerCase() === lead.email.toLowerCase()));
+      const lead = cleanLead(await aiJSON(isSales() ? salesPrompt() : leadPrompt(), groups[i], (n, name) => qi.note("Google is busy, trying again" + (n > 1 ? " with " + name : "") + "…")));
+      const dup = isSales()
+        ? leads.find(x => (lead.username && x.username && x.username.toLowerCase() === lead.username.toLowerCase()) || (lead.name && x.name && x.name.toLowerCase() === lead.name.toLowerCase()))
+        : leads.find(x => (lead.whatsapp && x.whatsapp === lead.whatsapp) || (lead.email && x.email && x.email.toLowerCase() === lead.email.toLowerCase()));
       if (dup) lead.notes = ("Same contact as “" + (dup.name || "another lead") + "” already in your list. " + lead.notes).trim();
       const ref = await F.addDoc(F.collection(fs, "leads"), lead);
       lastId = ref.id;
@@ -917,6 +1006,17 @@ function gate(title, text, action, label){
   const b = $("gateAction"); b.hidden = !action; b.textContent = label || ""; b.onclick = action || null;
 }
 function stopData(){ unsubLeads?.(); unsubSet?.(); unsubLeads = unsubSet = null; leads = []; loaded = false; closeSheet(); }
+// Tailor the page for a sales rep: simpler panel, no pitch talk, no job finder.
+function applyRoleUI(){
+  document.body.classList.toggle("sales", isSales());
+  const jobs = $("btnJobs"); if (jobs) jobs.hidden = isSales();
+  const sub = document.querySelector(".top .sub"); if (sub) sub.textContent = isSales() ? "Log who you've reached out to — the name and username are read for you." : "Drop a screenshot, get the pitch, send it in one tap.";
+  const addH = $("addH"); if (addH) addH.textContent = isSales() ? "Log an outreach" : "Add a lead";
+  const dropHint = document.querySelector("#drop span"); if (dropHint) dropHint.textContent = isSales() ? "Tap to choose, or paste with Ctrl+V. A profile, chat or post screenshot works." : "Tap to choose, or paste with Ctrl+V. Instagram profiles, job posts and LinkedIn posts all work.";
+  const how = document.querySelector(".steps"); if (how) how.innerHTML = isSales()
+    ? "<li><b>Drop a screenshot</b> of the person or chat. Their name and username are read for you.</li><li><b>It's logged</b> under you, and your total goes up.</li><li><b>Message them yourself</b> on the app you use.</li>"
+    : "<li><b>Drop a screenshot.</b> The name, number and email are read for you and a pitch is written for that business.</li><li><b>Check the message</b>, edit it or tap a quick rewrite.</li><li><b>Tap Open in WhatsApp or Gmail.</b> The message is already filled in. You press send there.</li><li><b>Mark it sent.</b> It moves to Follow up after a few days if they haven't replied.</li>";
+}
 
 async function onUser(u){
   stopData();
@@ -937,10 +1037,13 @@ async function onUser(u){
     return;
   }
   meName = member.data().name || meName;
+  myEmail = email; myRole = String(member.data().role || "owner").toLowerCase();
   $("meName").textContent = meName;
+  applyRoleUI();
   show("appView"); render();
   const timer = setTimeout(() => { if (!loaded){ loadErr = "Still trying to reach your leads. Check your internet."; render(); } }, 10000);
-  unsubLeads = F.onSnapshot(F.collection(fs, "leads"), snap => {
+  const leadQuery = isSales() ? F.query(F.collection(fs, "leads"), F.where("ownerEmail", "==", myEmail)) : F.collection(fs, "leads");
+  unsubLeads = F.onSnapshot(leadQuery, snap => {
     clearTimeout(timer); loaded = true; loadErr = "";
     leads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     for (const l of leads) if (pend[l.id]) Object.assign(l, pend[l.id].patch);
@@ -962,7 +1065,7 @@ if (firebaseConfig.apiKey.startsWith("PASTE")){
 
   $("btnGoogle").addEventListener("click", async () => {
     authMsg("");
-    try { await A.signInWithPopup(auth, new A.GoogleAuthProvider()); }
+    try { const prov = new A.GoogleAuthProvider(); prov.setCustomParameters({ prompt: "select_account" }); await A.signInWithPopup(auth, prov); }
     catch (e){ const t = authErr(e); if (t) authMsg(t); }
   });
   $("authForm").addEventListener("submit", async e => {
