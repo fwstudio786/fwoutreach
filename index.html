@@ -148,6 +148,22 @@ select{width:auto}
 .repname{font-weight:700;font-size:15px}
 .repstat{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
 .tab.salest[aria-pressed="true"]{background:var(--accent,#e0892f);border-color:var(--accent,#e0892f);color:#fff}
+.saleshead{display:flex;flex-direction:column;gap:10px;width:100%}
+.worksess{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.worksess.on{border-color:#e0892f}
+.wdot{width:9px;height:9px;border-radius:50%;background:#e0892f;animation:wpulse 1.6s infinite}
+@keyframes wpulse{0%{box-shadow:0 0 0 0 rgba(224,137,47,.5)}70%{box-shadow:0 0 0 8px rgba(224,137,47,0)}100%{box-shadow:0 0 0 0 rgba(224,137,47,0)}}
+.wlabel{font-weight:600}
+.welapsed{font-variant-numeric:tabular-nums;font-weight:700;font-size:17px;min-width:58px}
+.wcount{color:var(--muted);font-size:13px}
+.startbtn{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}
+.stopbtn{margin-left:auto;background:#c23b3b;border-color:#c23b3b;color:#fff;font-weight:600}
+.platrow{display:flex;gap:8px;flex-wrap:wrap}
+.platchip{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12.5px;color:var(--muted)}
+.platchip b{color:var(--fg);font-variant-numeric:tabular-nums;margin-right:3px}
+.repsess{display:flex;flex-direction:column;gap:3px;margin:2px 2px 8px;padding:8px 10px;background:var(--panel2);border-radius:9px}
+.sessrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;font-variant-numeric:tabular-nums}
+body.sales #samePost,body.sales .check{display:none}
 </style>
 
 <style>
@@ -289,8 +305,17 @@ const isSales = () => myRole === "sales";
 const boardLeads = () => isSales() ? leads : leads.filter(l => l.track !== "sales");
 const salesLeads = () => leads.filter(l => l.track === "sales");
 function salesStats(arr){ const d = new Date(); d.setHours(0,0,0,0); const t0 = d.getTime(), w0 = Date.now() - 7*864e5; let today = 0, week = 0; for (const l of arr){ const c = l.createdAt || 0; if (c >= t0) today++; if (c >= w0) week++; } return { total: arr.length, today, week }; }
-let unsubLeads = null, unsubSet = null;
+let unsubLeads = null, unsubSet = null, unsubSessions = null, sessions = [], tick = null;
 const pend = {}, undoMsg = {};
+// ---- work sessions: a sales rep clocks in / out, we time it and count what they log ----
+function activeSession(){ return sessions.find(s => s.ownerEmail === myEmail && !s.endAt); }
+function sessionCount(sess, arr){ const a = sess.startAt || 0, b = sess.endAt || Date.now(); return arr.filter(l => (l.createdAt || 0) >= a && (l.createdAt || 0) <= b).length; }
+function fmtDur(ms){ const s = Math.max(0, Math.floor(ms / 1000)), hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60, p = n => String(n).padStart(2, "0"); return (hh ? hh + ":" + p(mm) : mm) + ":" + p(ss); }
+function fmtClock(t){ return t ? new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""; }
+function startTick(){ if (tick) return; tick = setInterval(() => { const act = activeSession(), el = $("sessElapsed"); if (!act || !el){ clearInterval(tick); tick = null; return; } el.textContent = fmtDur(Date.now() - act.startAt); }, 1000); }
+async function startSession(){ if (activeSession()){ toast("You're already clocked in."); return; } try { await F.addDoc(F.collection(fs, "sessions"), { ownerEmail: myEmail, name: meName, startAt: Date.now(), endAt: null }); } catch (e){ toast(errText(e)); } }
+async function stopSession(){ const act = activeSession(); if (!act) return; try { await F.updateDoc(F.doc(fs, "sessions", act.id), { endAt: Date.now() }); } catch (e){ toast(errText(e)); } }
+function platformRow(arr){ const c = platformStats(arr), row = h("div", { class:"platrow" }); let any = false; for (const [k, lab] of PLATFORMS){ if (c[k]){ any = true; row.append(h("span", { class:"platchip" }, h("b", { text: String(c[k]) }), " " + lab)); } } return any ? row : null; }
 const DAY = 864e5;
 const $ = id => document.getElementById(id);
 const STAGES = [["all","All"],["new","To send"],["due","Follow up"],["sent","Waiting"],["replied","Replied"],["won","Won"],["lost","Lost"]];
@@ -474,11 +499,27 @@ function counts(){ const bl = boardLeads(); const c = { all: bl.length }; for (c
 function renderTabs(){
   const nav = $("tabs"); nav.textContent = "";
   if (isSales()){
+    const wrap = h("div", { class:"saleshead" }), act = activeSession();
+    if (act){
+      wrap.append(h("div", { class:"worksess on" },
+        h("span", { class:"wdot" }),
+        h("span", { class:"wlabel", text:"Working" }),
+        h("span", { class:"welapsed", id:"sessElapsed", text: fmtDur(Date.now() - act.startAt) }),
+        h("span", { class:"wcount", text: sessionCount(act, leads) + " logged this session" }),
+        h("button", { type:"button", class:"stopbtn", onclick: stopSession }, "Stop working")));
+      startTick();
+    } else {
+      wrap.append(h("div", { class:"worksess" },
+        h("button", { type:"button", class:"startbtn", onclick: startSession }, "▶ Start working"),
+        h("span", { class:"hint", text:"Clock in to time your session and count what you do." })));
+    }
     const s = salesStats(leads);
-    nav.append(h("div", { class:"statbar" },
+    wrap.append(h("div", { class:"statbar" },
       h("span", { class:"stat" }, h("b", { text: String(s.total) }), " total"),
       h("span", { class:"stat" }, h("b", { text: String(s.today) }), " today"),
       h("span", { class:"stat" }, h("b", { text: String(s.week) }), " this week")));
+    const pr = platformRow(leads); if (pr) wrap.append(pr);
+    nav.append(wrap);
     return;
   }
   const c = counts(), tabs = [...STAGES, ["sales","Sales"]];
@@ -551,12 +592,21 @@ function renderSalesView(list, empty){
   empty.hidden = true;
   const byRep = new Map();
   for (const l of all){ const key = l.ownerEmail || l.createdBy || "someone"; if (!byRep.has(key)) byRep.set(key, []); byRep.get(key).push(l); }
-  for (const [, arr] of byRep){
+  for (const [key, arr] of byRep){
     arr.sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
     const s = salesStats(arr);
     list.append(h("div", { class:"rephead" },
       h("span", { class:"repname", text: arr[0].createdBy || "Sales rep" }),
       h("span", { class:"repstat", text: s.total + " total · " + s.today + " today · " + s.week + " this week" })));
+    const pr = platformRow(arr); if (pr) list.append(pr);
+    const reps = sessions.filter(x => (x.ownerEmail || "") === key).sort((a, b) => (b.startAt||0) - (a.startAt||0)).slice(0, 8);
+    if (reps.length){
+      const sw = h("div", { class:"repsess" });
+      for (const se of reps) sw.append(h("div", { class:"sessrow" },
+        h("span", { text: fmtClock(se.startAt) + (se.endAt ? "–" + fmtClock(se.endAt) : " · now") }),
+        h("span", { class:"hint", text: (se.endAt ? fmtDur(se.endAt - se.startAt) : "running") + " · " + sessionCount(se, arr) + " done" })));
+      list.append(sw);
+    }
     for (const l of arr) list.append(h("button", { type:"button", class:"lead", onclick:() => openLead(l.id) },
       h("span", { class:"av", "aria-hidden":"true", text: initials(l.name) }),
       h("span", { class:"lmain" },
@@ -753,10 +803,27 @@ ${RULES()}
 
 ${JSON_SHAPE()}`;
 // A sales rep only logs who they reached — no pitch — so a light, fast read of just the name + handle.
-const salesPrompt = () => `Look at this screenshot — a social profile, a chat/DM, or a post. Pull out who it is.
+const salesPrompt = () => `This screenshot is from a salesperson's outreach. It may be a single profile or chat, OR a list with MANY people — an email "Sent" folder, a DM list, search results, a followers list. Find EVERY distinct person or business shown.
+First decide which platform the screenshot is from.
 Reply with only one JSON object, no other text:
-{"name": "the person or business name, or empty", "username": "their @handle or username if shown, or empty", "niche": "what they do in 2-4 words, or empty", "location": "city or country if shown, or empty", "source": "Instagram" | "LinkedIn" | "Facebook" | "TikTok" | "WhatsApp" | "Other"}
-Copy names and @handles exactly as shown. Never guess. No message, no other fields.`;
+{"platform": "Gmail" | "LinkedIn" | "Instagram" | "Threads" | "Twitter" | "Facebook" | "TikTok" | "WhatsApp" | "Other", "contacts": [{"name": "person or business name, or empty", "username": "their @handle, email, or username if shown, or empty", "niche": "what they do in 2-4 words, or empty", "location": "city or country if shown, or empty"}]}
+Put one entry in "contacts" for EACH distinct person/business you can see — if the screenshot shows 8 sent emails, return all 8. Copy names, @handles and emails exactly as shown. Never guess or invent anyone. No message, no other fields.`;
+// Platforms a sales rep works, counted separately.
+const PLATFORMS = [["gmail","Gmail"],["linkedin","LinkedIn"],["instagram","Instagram"],["threads","Threads"],["twitter","Twitter / X"],["facebook","Facebook"],["tiktok","TikTok"],["whatsapp","WhatsApp"],["other","Other"]];
+const PLAT_LABEL = Object.fromEntries(PLATFORMS);
+const platLabel = p => PLAT_LABEL[p] || "Other";
+function normPlatform(s){ s = String(s || "").toLowerCase().trim();
+  if (/gmail|email|mail|outlook/.test(s)) return "gmail";
+  if (s.includes("linkedin")) return "linkedin";
+  if (s.includes("thread")) return "threads";
+  if (s.includes("instagram") || s === "ig" || s === "insta") return "instagram";
+  if (s.includes("twitter") || s === "x" || s.includes("tweet")) return "twitter";
+  if (s.includes("facebook") || s === "fb" || s.includes("messenger")) return "facebook";
+  if (s.includes("tiktok")) return "tiktok";
+  if (s.includes("whatsapp") || s === "wa") return "whatsapp";
+  return "other";
+}
+function platformStats(arr){ const c = {}; for (const l of arr){ const p = l.platform || "other"; c[p] = (c[p] || 0) + 1; } return c; }
 
 /* ---------- AI actions ---------- */
 function setAiStatus(t){ const el = $("aiStatus"); if (el) el.textContent = t || ""; }
@@ -830,7 +897,7 @@ function cleanLead(r){
   let channel = ["whatsapp","email","linkedin","instagram"].includes(r.channel) ? r.channel : (whatsapp ? "whatsapp" : email ? "email" : "instagram");
   if (channel === "whatsapp" && !whatsapp && email) channel = "email";
   return {
-    name: str(r.name, 140), kind: r.kind === "job" ? "job" : "business", source: str(r.source, 40),
+    name: str(r.name, 140), kind: r.kind === "job" ? "job" : "business", source: str(r.source, 40), platform: normPlatform(r.platform || r.source),
     niche: str(r.niche, 80), location: str(r.location, 100), whatsapp, phone: str(r.phone, 40), email,
     profile: str(r.profile, 240), username: str(r.username, 80), channel, subject: str(r.subject, 200), message: str(r.message, 6000),
     notes: str(r.notes, 1200), status: "new", createdAt: Date.now(), createdBy: meName, ownerEmail: myEmail, track: isSales() ? "sales" : "team", sentAt: null, sentBy: null, followUpAt: null, followUps: 0, followMsg: ""
@@ -838,6 +905,7 @@ function cleanLead(r){
 }
 let reading = false;
 async function readShots(files){
+  if (isSales()) return readShotsSales(files);
   files = [...files].filter(f => /^image\//.test(f.type));
   if (!files.length){ toast("Those aren't images. Drop screenshots (PNG or JPG)."); return; }
   if (reading){ toast("Still reading the last screenshot. One moment."); return; }
@@ -859,6 +927,34 @@ async function readShots(files){
   }
   reading = false; $("file").value = "";
   if (groups.length === 1 && lastId) setTimeout(() => { if (leads.find(x => x.id === lastId)) openLead(lastId); }, 300);
+}
+// Sales rep: read EVERY person in each screenshot and log each as a separate outreach.
+const fatal = e => e && (e.code === "permission-denied" || /RESOURCE_EXHAUSTED|SERVICE_DISABLED|app.?check|attestation/i.test(String(e.message)));
+async function readShotsSales(files){
+  files = [...files].filter(f => /^image\//.test(f.type));
+  if (!files.length){ toast("Those aren't images. Drop screenshots (PNG or JPG)."); return; }
+  if (reading){ toast("Still reading the last screenshot. One moment."); return; }
+  reading = true;
+  const list = files.slice(0, 10), seen = new Set(leads.map(x => (x.username || x.name || "").toLowerCase()).filter(Boolean));
+  for (let i = 0; i < list.length; i++){
+    const qi = addQ(list.length > 1 ? `Reading screenshot ${i + 1} of ${list.length}…` : "Reading the screenshot…");
+    try {
+      const r = await aiJSON(salesPrompt(), [list[i]], () => qi.note("Google is busy, trying again…"));
+      const platform = normPlatform(r && (r.platform || r.source));
+      const contacts = Array.isArray(r && r.contacts) ? r.contacts : (r && (r.name || r.username) ? [r] : []);
+      let added = 0, stop = false;
+      for (const c of contacts){
+        const nm = str(c && c.name, 140), un = str(c && c.username, 80);
+        if (!nm && !un) continue;
+        const key = (un || nm).toLowerCase(); if (seen.has(key)) continue; seen.add(key);
+        try { await F.addDoc(F.collection(fs, "leads"), cleanLead({ name: nm, username: un, niche: c.niche, location: c.location, source: r && r.platform })); added++; }
+        catch (e){ if (fatal(e)){ qi.err(errText(e)); stop = true; break; } }
+      }
+      qi.done(added ? `Logged ${added} ${added === 1 ? "contact" : "contacts"}` + (platform !== "other" ? " · " + platLabel(platform) : "") : "No new contacts found");
+      if (stop) break;
+    } catch (e){ qi.err(errText(e)); if (fatal(e)) break; }
+  }
+  reading = false; $("file").value = "";
 }
 async function addManual(){
   try { const ref = await F.addDoc(F.collection(fs, "leads"), cleanLead({ channel:"whatsapp" })); setTimeout(() => { openLead(ref.id); $("f-name")?.focus(); }, 300); }
@@ -1005,16 +1101,16 @@ function gate(title, text, action, label){
   show("gateView"); $("gateTitle").textContent = title; $("gateText").textContent = text;
   const b = $("gateAction"); b.hidden = !action; b.textContent = label || ""; b.onclick = action || null;
 }
-function stopData(){ unsubLeads?.(); unsubSet?.(); unsubLeads = unsubSet = null; leads = []; loaded = false; closeSheet(); }
+function stopData(){ unsubLeads?.(); unsubSet?.(); unsubSessions?.(); unsubLeads = unsubSet = unsubSessions = null; sessions = []; if (tick){ clearInterval(tick); tick = null; } leads = []; loaded = false; closeSheet(); }
 // Tailor the page for a sales rep: simpler panel, no pitch talk, no job finder.
 function applyRoleUI(){
   document.body.classList.toggle("sales", isSales());
   const jobs = $("btnJobs"); if (jobs) jobs.hidden = isSales();
   const sub = document.querySelector(".top .sub"); if (sub) sub.textContent = isSales() ? "Log who you've reached out to — the name and username are read for you." : "Drop a screenshot, get the pitch, send it in one tap.";
   const addH = $("addH"); if (addH) addH.textContent = isSales() ? "Log an outreach" : "Add a lead";
-  const dropHint = document.querySelector("#drop span"); if (dropHint) dropHint.textContent = isSales() ? "Tap to choose, or paste with Ctrl+V. A profile, chat or post screenshot works." : "Tap to choose, or paste with Ctrl+V. Instagram profiles, job posts and LinkedIn posts all work.";
+  const dropHint = document.querySelector("#drop span"); if (dropHint) dropHint.textContent = isSales() ? "Tap to choose, or paste with Ctrl+V. A profile, a chat, or a whole sent/DM list — everyone in it gets logged." : "Tap to choose, or paste with Ctrl+V. Instagram profiles, job posts and LinkedIn posts all work.";
   const how = document.querySelector(".steps"); if (how) how.innerHTML = isSales()
-    ? "<li><b>Drop a screenshot</b> of the person or chat. Their name and username are read for you.</li><li><b>It's logged</b> under you, and your total goes up.</li><li><b>Message them yourself</b> on the app you use.</li>"
+    ? "<li><b>Start working</b> to time your session.</li><li><b>Drop a screenshot</b> — a profile, a chat, or a whole sent/DM list. Everyone in it is logged under you, split by platform.</li><li><b>Stop working</b> when you're done. Your totals keep counting.</li>"
     : "<li><b>Drop a screenshot.</b> The name, number and email are read for you and a pitch is written for that business.</li><li><b>Check the message</b>, edit it or tap a quick rewrite.</li><li><b>Tap Open in WhatsApp or Gmail.</b> The message is already filled in. You press send there.</li><li><b>Mark it sent.</b> It moves to Follow up after a few days if they haven't replied.</li>";
 }
 
@@ -1051,6 +1147,8 @@ async function onUser(u){
     if (openId && sheetMode === "lead") syncSheet();
   }, e => { clearTimeout(timer); loadErr = errText(e); render(); });
   unsubSet = F.onSnapshot(F.doc(fs, "settings", "main"), s => { if (s.exists() && sheetMode !== "settings") S = { ...DEF, ...s.data() }; }, () => {});
+  const sessQuery = isSales() ? F.query(F.collection(fs, "sessions"), F.where("ownerEmail", "==", myEmail)) : F.collection(fs, "sessions");
+  unsubSessions = F.onSnapshot(sessQuery, snap => { sessions = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, () => {});
 }
 
 /* ---------- start ---------- */
