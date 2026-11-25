@@ -163,6 +163,13 @@ select{width:auto}
 .platchip b{color:var(--fg);font-variant-numeric:tabular-nums;margin-right:3px}
 .repsess{display:flex;flex-direction:column;gap:3px;margin:2px 2px 8px;padding:8px 10px;background:var(--panel2);border-radius:9px}
 .sessrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;font-variant-numeric:tabular-nums}
+.plattabs{display:flex;gap:6px;flex-wrap:wrap}
+.ptab{border-radius:999px;padding:5px 11px;font-size:13px;white-space:nowrap;flex:none}
+.ptab b{font-variant-numeric:tabular-nums;margin-left:4px;color:var(--muted);font-weight:600}
+.ptab.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.ptab.on b{color:var(--bg)}
+.ptab.add{color:var(--muted)}
+.platnote{margin:0}
 body.sales #samePost,body.sales .check{display:none}
 </style>
 
@@ -315,7 +322,34 @@ function fmtClock(t){ return t ? new Date(t).toLocaleTimeString([], { hour: "num
 function startTick(){ if (tick) return; tick = setInterval(() => { const act = activeSession(), el = $("sessElapsed"); if (!act || !el){ clearInterval(tick); tick = null; return; } el.textContent = fmtDur(Date.now() - act.startAt); }, 1000); }
 async function startSession(){ if (activeSession()){ toast("You're already clocked in."); return; } try { await F.addDoc(F.collection(fs, "sessions"), { ownerEmail: myEmail, name: meName, startAt: Date.now(), endAt: null }); } catch (e){ toast(errText(e)); } }
 async function stopSession(){ const act = activeSession(); if (!act) return; try { await F.updateDoc(F.doc(fs, "sessions", act.id), { endAt: Date.now() }); } catch (e){ toast(errText(e)); } }
-function platformRow(arr){ const c = platformStats(arr), row = h("div", { class:"platrow" }); let any = false; for (const [k, lab] of PLATFORMS){ if (c[k]){ any = true; row.append(h("span", { class:"platchip" }, h("b", { text: String(c[k]) }), " " + lab)); } } return any ? row : null; }
+// Per-platform chips for the owners' view (handles custom platforms too).
+function platformRow(arr){
+  const c = {}, nm = {};
+  for (const l of arr){ const k = l.platform || "other"; c[k] = (c[k] || 0) + 1; if (l.platName) nm[k] = l.platName; }
+  const keys = Object.keys(c); if (!keys.length) return null;
+  const ordered = [...PLATFORMS.map(([k]) => k).filter(k => c[k]), ...keys.filter(k => !PLAT_LABEL[k])];
+  const row = h("div", { class:"platrow" });
+  for (const k of ordered) row.append(h("span", { class:"platchip" }, h("b", { text: String(c[k]) }), " " + (nm[k] || PLAT_LABEL[k] || titleize(k))));
+  return row;
+}
+// ---- the sales rep's current platform (filters the list AND tags new logs). null = All / auto-detect ----
+let salesPlat = null;
+function loadLS(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e){ return d; } }
+function saveLS(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e){} }
+function customPlats(){ return loadLS("fwo_custplats", []); }
+function addCustomPlat(name){ const key = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24); if (!key) return null; const nm = String(name).trim().slice(0, 30); const list = customPlats(); if (!list.some(p => p.key === key)) { list.push({ key, name: nm }); saveLS("fwo_custplats", list); } return { key, name: nm }; }
+const titleize = s => String(s || "Other").replace(/[-_]+/g, " ").replace(/\b\w/g, m => m.toUpperCase());
+function setSalesPlat(p){ salesPlat = p; saveLS("fwo_salesplat", p); render(); }
+function addPlatPrompt(){ const n = prompt("Add a platform (e.g. Snapchat, Reddit, Upwork, Fiverr):"); if (n && n.trim()){ const cp = addCustomPlat(n); if (cp) setSalesPlat(cp); else toast("Give the platform a name with letters."); } }
+function platTabs(arr){
+  const present = new Map();
+  for (const l of arr){ const k = l.platform || "other", e = present.get(k) || { name: l.platName || PLAT_LABEL[k] || titleize(k), count: 0 }; e.count++; present.set(k, e); }
+  for (const cp of customPlats()) if (!present.has(cp.key)) present.set(cp.key, { name: cp.name, count: 0 });
+  const out = [];
+  for (const [k, lab] of PLATFORMS) if (present.has(k)){ out.push({ key: k, name: lab, count: present.get(k).count }); present.delete(k); }
+  for (const [k, e] of present) out.push({ key: k, name: e.name, count: e.count });
+  return out;
+}
 const DAY = 864e5;
 const $ = id => document.getElementById(id);
 const STAGES = [["all","All"],["new","To send"],["due","Follow up"],["sent","Waiting"],["replied","Replied"],["won","Won"],["lost","Lost"]];
@@ -518,7 +552,12 @@ function renderTabs(){
       h("span", { class:"stat" }, h("b", { text: String(s.total) }), " total"),
       h("span", { class:"stat" }, h("b", { text: String(s.today) }), " today"),
       h("span", { class:"stat" }, h("b", { text: String(s.week) }), " this week")));
-    const pr = platformRow(leads); if (pr) wrap.append(pr);
+    const prow = h("div", { class:"plattabs" });
+    prow.append(h("button", { type:"button", class:"ptab" + (!salesPlat ? " on" : ""), onclick:() => setSalesPlat(null) }, "All ", h("b", { text: String(leads.length) })));
+    for (const p of platTabs(leads)) prow.append(h("button", { type:"button", class:"ptab" + (salesPlat && salesPlat.key === p.key ? " on" : ""), onclick:() => setSalesPlat({ key: p.key, name: p.name }) }, p.name + " ", h("b", { text: String(p.count) })));
+    prow.append(h("button", { type:"button", class:"ptab add", onclick: addPlatPrompt }, "+ Add"));
+    wrap.append(prow);
+    wrap.append(h("p", { class:"hint platnote", text: salesPlat ? "New screenshots get logged as " + salesPlat.name + ". Tap All for auto-detect." : "Platform is auto-detected per screenshot. Tap one to log everything as that platform." }));
     nav.append(wrap);
     return;
   }
@@ -581,6 +620,7 @@ function render(){
 function salesVisible(){
   const qq = q.toLowerCase();
   let out = leads.slice();
+  if (salesPlat) out = out.filter(l => (l.platform || "other") === salesPlat.key);
   if (qq) out = out.filter(l => [l.name, l.username, l.niche, l.location].join(" ").toLowerCase().includes(qq));
   out.sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
   return out;
@@ -896,8 +936,9 @@ function cleanLead(r){
   const email = str(r.email, 160).replace(/\s/g, "");
   let channel = ["whatsapp","email","linkedin","instagram"].includes(r.channel) ? r.channel : (whatsapp ? "whatsapp" : email ? "email" : "instagram");
   if (channel === "whatsapp" && !whatsapp && email) channel = "email";
+  const pk = r.platformKey ? String(r.platformKey).toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24) : normPlatform(r.platform || r.source);
   return {
-    name: str(r.name, 140), kind: r.kind === "job" ? "job" : "business", source: str(r.source, 40), platform: normPlatform(r.platform || r.source),
+    name: str(r.name, 140), kind: r.kind === "job" ? "job" : "business", source: str(r.source, 40), platform: pk, platName: str(r.platName, 30) || PLAT_LABEL[pk] || "Other",
     niche: str(r.niche, 80), location: str(r.location, 100), whatsapp, phone: str(r.phone, 40), email,
     profile: str(r.profile, 240), username: str(r.username, 80), channel, subject: str(r.subject, 200), message: str(r.message, 6000),
     notes: str(r.notes, 1200), status: "new", createdAt: Date.now(), createdBy: meName, ownerEmail: myEmail, track: isSales() ? "sales" : "team", sentAt: null, sentBy: null, followUpAt: null, followUps: 0, followMsg: ""
@@ -940,17 +981,19 @@ async function readShotsSales(files){
     const qi = addQ(list.length > 1 ? `Reading screenshot ${i + 1} of ${list.length}…` : "Reading the screenshot…");
     try {
       const r = await aiJSON(salesPrompt(), [list[i]], () => qi.note("Google is busy, trying again…"));
-      const platform = normPlatform(r && (r.platform || r.source));
+      // If the rep chose a platform tab, tag with it; otherwise auto-detect from the screenshot.
+      const pKey = salesPlat ? salesPlat.key : normPlatform(r && (r.platform || r.source));
+      const pName = salesPlat ? salesPlat.name : (PLAT_LABEL[pKey] || "Other");
       const contacts = Array.isArray(r && r.contacts) ? r.contacts : (r && (r.name || r.username) ? [r] : []);
       let added = 0, stop = false;
       for (const c of contacts){
         const nm = str(c && c.name, 140), un = str(c && c.username, 80);
         if (!nm && !un) continue;
         const key = (un || nm).toLowerCase(); if (seen.has(key)) continue; seen.add(key);
-        try { await F.addDoc(F.collection(fs, "leads"), cleanLead({ name: nm, username: un, niche: c.niche, location: c.location, source: r && r.platform })); added++; }
+        try { await F.addDoc(F.collection(fs, "leads"), cleanLead({ name: nm, username: un, niche: c.niche, location: c.location, source: r && r.platform, platformKey: pKey, platName: pName })); added++; }
         catch (e){ if (fatal(e)){ qi.err(errText(e)); stop = true; break; } }
       }
-      qi.done(added ? `Logged ${added} ${added === 1 ? "contact" : "contacts"}` + (platform !== "other" ? " · " + platLabel(platform) : "") : "No new contacts found");
+      qi.done(added ? `Logged ${added} ${added === 1 ? "contact" : "contacts"} · ${pName}` : "No new contacts found");
       if (stop) break;
     } catch (e){ qi.err(errText(e)); if (fatal(e)) break; }
   }
@@ -1105,6 +1148,7 @@ function stopData(){ unsubLeads?.(); unsubSet?.(); unsubSessions?.(); unsubLeads
 // Tailor the page for a sales rep: simpler panel, no pitch talk, no job finder.
 function applyRoleUI(){
   document.body.classList.toggle("sales", isSales());
+  salesPlat = isSales() ? loadLS("fwo_salesplat", null) : null;
   const jobs = $("btnJobs"); if (jobs) jobs.hidden = isSales();
   const sub = document.querySelector(".top .sub"); if (sub) sub.textContent = isSales() ? "Log who you've reached out to — the name and username are read for you." : "Drop a screenshot, get the pitch, send it in one tap.";
   const addH = $("addH"); if (addH) addH.textContent = isSales() ? "Log an outreach" : "Add a lead";
