@@ -313,6 +313,7 @@ const boardLeads = () => isSales() ? leads : leads.filter(l => l.track !== "sale
 const salesLeads = () => leads.filter(l => l.track === "sales");
 function salesStats(arr){ const d = new Date(); d.setHours(0,0,0,0); const t0 = d.getTime(), w0 = Date.now() - 7*864e5; let today = 0, week = 0; for (const l of arr){ const c = l.createdAt || 0; if (c >= t0) today++; if (c >= w0) week++; } return { total: arr.length, today, week }; }
 let unsubLeads = null, unsubSet = null, unsubSessions = null, sessions = [], tick = null;
+let trackRep = null, salesTrackOpen = false, setBusy = 0;
 const pend = {}, undoMsg = {};
 // ---- work sessions: a sales rep clocks in / out, we time it and count what they log ----
 function activeSession(){ return sessions.find(s => s.ownerEmail === myEmail && !s.endAt); }
@@ -528,6 +529,160 @@ function flush(id){
 }
 async function saveNow(id, patch){ queueSave(id, patch, 0); await flush(id); render(); }
 
+/* ---------- daily outreach tracker ---------- */
+const DAYMS = 864e5, TRACK_DAYS = 14;
+const BUILTIN_TARGETS = { instagram: 25, linkedin: 30, twitter: 25, gmail: 30, threads: 20 }, BUILTIN_STRETCH = 200;
+const dayStart = (ts) => { const d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); };
+const fmtDate = (ts) => new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+const fmtDow  = (ts) => new Date(ts).toLocaleDateString([], { weekday: "short" });
+const plName  = (k) => PLAT_LABEL[k] || (k ? k.charAt(0).toUpperCase() + k.slice(1) : "Other");
+function effTargets(){ const t = S.platTargets; return (t && typeof t === "object" && Object.keys(t).length) ? t : BUILTIN_TARGETS; }
+function effStretch(){ const v = Number(S.stretch); return v > 0 ? v : BUILTIN_STRETCH; }
+function dailyTargetTotal(){ return Object.values(effTargets()).reduce((s, v) => s + (Number(v) || 0), 0) || 130; }
+function trackPlatforms(repLeads){
+  const set = new Set(); const t = effTargets();
+  for (const k in t) if ((Number(t[k]) || 0) > 0) set.add(k);
+  for (const l of repLeads) set.add(l.platform || "other");
+  const order = PLATFORMS.map(p => p[0]);
+  return [...set].sort((a, b) => ((order.indexOf(a) + 1) || 99) - ((order.indexOf(b) + 1) || 99));
+}
+function trackerDays(repLeads, n){
+  const t0 = dayStart(Date.now()), rows = [];
+  for (let i = 0; i < n; i++){
+    const a = t0 - i * DAYMS, b = a + DAYMS, per = {}; let tot = 0;
+    for (const l of repLeads){ const c = l.createdAt || 0; if (c >= a && c < b){ tot++; const p = l.platform || "other"; per[p] = (per[p] || 0) + 1; } }
+    rows.push({ day: a, total: tot, per });
+  }
+  return rows;
+}
+function dayStatus(sent, target, stretch){
+  if (!sent) return ["No outreach", "none"];
+  if (stretch && sent >= stretch) return ["Stretch", "stretch"];
+  if (sent >= target) return ["On target", "ok"];
+  return ["Below", "low"];
+}
+function renderTrackerView(list, empty){
+  empty.hidden = true;
+  const lh = $("search") && $("search").closest(".listhead"); if (lh) lh.hidden = true;
+  if (isSales()){ drawTracker(list, leads, meName || "You", false); return; }
+  const all = salesLeads(), byRep = new Map();
+  for (const l of all){ const k = l.ownerEmail || l.createdBy || "someone"; if (!byRep.has(k)) byRep.set(k, { name: l.createdBy || "Sales rep", leads: [] }); byRep.get(k).leads.push(l); }
+  if (!byRep.size){ empty.hidden = false; empty.append(h("strong", { text: "No sales outreach yet" }), h("span", { text: "When a rep logs outreach, their daily tracker shows up here." })); return; }
+  const keys = [...byRep.keys()];
+  if (!trackRep || !byRep.has(trackRep)) trackRep = keys[0];
+  const sel = h("div", { class: "trk-reps" });
+  for (const k of keys) sel.append(h("button", { type: "button", class: "trk-rep" + (k === trackRep ? " on" : ""), onclick: () => { trackRep = k; render(); } }, byRep.get(k).name));
+  list.append(sel);
+  drawTracker(list, byRep.get(trackRep).leads, byRep.get(trackRep).name, true);
+}
+function drawTracker(container, repLeads, repName, canEdit){
+  const plats = trackPlatforms(repLeads), target = dailyTargetTotal(), stretch = effStretch();
+  const s = salesStats(repLeads), rows = trackerDays(repLeads, TRACK_DAYS);
+  const avg7 = Math.round(rows.slice(0, 7).reduce((a, r) => a + r.total, 0) / 7);
+  const todayPct = target ? Math.round((rows[0].total / target) * 100) : 0;
+  const wrap = h("div", { class: "trk" });
+  wrap.append(h("div", { class: "trk-title" }, h("b", { text: repName + " · Daily tracker" }), h("span", { class: "hint", text: "Auto-filled from logged messages" })));
+  const kpi = (label, val, sub) => h("div", { class: "kpi" }, h("span", { class: "kv", text: String(val) }), h("span", { class: "kl", text: label }), sub ? h("span", { class: "ks", text: sub }) : null);
+  wrap.append(h("div", { class: "trk-kpis" },
+    kpi("Total sent", s.total),
+    kpi("This week", s.week),
+    kpi("Today", s.today, "target " + target),
+    kpi("Today", (target ? todayPct : 0) + "%", "of target"),
+    kpi("Avg / day", avg7 || 0, "last 7 days")));
+  const tp = h("div", { class: "trk-targets" });
+  tp.append(h("div", { class: "trk-th" }, h("b", { text: "Daily targets" }), h("span", { class: "hint", id: "trkTot", text: "Total " + target + " · stretch " + stretch })));
+  const tg = h("div", { class: "trk-tgrid" });
+  for (const k of plats){
+    const cur = Number(effTargets()[k]) || 0;
+    tg.append(canEdit
+      ? h("label", { class: "trk-tg" }, h("span", { text: plName(k) }), h("input", { type: "number", min: "0", inputmode: "numeric", value: String(cur), oninput: e => setPlatTarget(k, e.target.value), onchange: () => render() }))
+      : h("div", { class: "trk-tg ro" }, h("span", { text: plName(k) }), h("b", { text: String(cur) })));
+  }
+  if (canEdit) tg.append(h("label", { class: "trk-tg stretch" }, h("span", { text: "Stretch" }), h("input", { type: "number", min: "0", inputmode: "numeric", value: String(stretch), oninput: e => setStretch(e.target.value), onchange: () => render() })));
+  tp.append(tg); wrap.append(tp);
+  const scroll = h("div", { class: "trk-scroll" }), tbl = h("table", { class: "trk-table" });
+  const hr = h("tr", {}, h("th", { text: "Date" }), h("th", { text: "Day" }), h("th", { text: "Target" }), h("th", { text: "Sent" }), h("th", { text: "Var" }), h("th", { text: "%" }));
+  for (const k of plats) hr.append(h("th", { text: plName(k) }));
+  hr.append(h("th", { text: "Status" }));
+  tbl.append(h("thead", {}, hr));
+  const tb = h("tbody"); let wkRows = [], wkTot = 0, wkPer = {};
+  const flushWeek = () => {
+    if (!wkRows.length) return;
+    const tgt = target * wkRows.length, v = wkTot - tgt;
+    const tr = h("tr", { class: "trk-wk" }, h("td", { text: "Week" }), h("td", { text: wkRows.length + "d" }), h("td", { class: "num", text: String(tgt) }), h("td", { class: "num", text: String(wkTot) }), h("td", { class: "num " + (v < 0 ? "neg" : v > 0 ? "pos" : ""), text: (v > 0 ? "+" : "") + v }), h("td", { class: "num", text: (tgt ? Math.round(wkTot / tgt * 100) : 0) + "%" }));
+    for (const k of plats) tr.append(h("td", { class: "num", text: String(wkPer[k] || 0) }));
+    tr.append(h("td", {}));
+    tb.append(tr); wkRows = []; wkTot = 0; wkPer = {};
+  };
+  rows.forEach((r, i) => {
+    const v = r.total - target, pct = target ? Math.round(r.total / target * 100) : 0, [slabel, scls] = dayStatus(r.total, target, stretch);
+    const tr = h("tr", { class: r.total ? "" : "trk-0" },
+      h("td", { text: fmtDate(r.day) }), h("td", { class: "mut", text: fmtDow(r.day) }),
+      h("td", { class: "num mut", text: String(target) }), h("td", { class: "num b", text: String(r.total) }),
+      h("td", { class: "num " + (v < 0 ? "neg" : v > 0 ? "pos" : ""), text: (v > 0 ? "+" : "") + v }),
+      h("td", { class: "num", text: pct + "%" }));
+    for (const k of plats) tr.append(h("td", { class: "num" + (r.per[k] ? "" : " z"), text: r.per[k] ? String(r.per[k]) : "·" }));
+    tr.append(h("td", {}, h("span", { class: "trk-st " + scls, text: slabel })));
+    tb.append(tr);
+    wkRows.push(r); wkTot += r.total; for (const k of plats) wkPer[k] = (wkPer[k] || 0) + (r.per[k] || 0);
+    if (wkRows.length === 7 || i === rows.length - 1) flushWeek();
+  });
+  tbl.append(tb); scroll.append(tbl); wrap.append(scroll); container.append(wrap);
+}
+function setPlatTarget(k, val){
+  const n = Math.max(0, Math.min(9999, parseInt(val, 10) || 0));
+  const t = { ...effTargets() }; t[k] = n; S.platTargets = t; setBusy = Date.now(); saveSettingsSoon();
+  const tot = $("trkTot"); if (tot) tot.textContent = "Total " + dailyTargetTotal() + " · stretch " + effStretch();
+}
+function setStretch(val){ S.stretch = Math.max(0, Math.min(99999, parseInt(val, 10) || 0)); setBusy = Date.now(); saveSettingsSoon();
+  const tot = $("trkTot"); if (tot) tot.textContent = "Total " + dailyTargetTotal() + " · stretch " + effStretch(); }
+let saveSetT = null;
+function saveSettingsSoon(){ clearTimeout(saveSetT); saveSetT = setTimeout(async () => { try { await F.setDoc(F.doc(fs, "settings", "main"), { ...S }); } catch (e){ toast(errText(e)); } }, 600); }
+(function trkCss(){
+  if (document.getElementById("trkcss")) return;
+  const st = document.createElement("style"); st.id = "trkcss";
+  st.textContent = `
+  .trk-reps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .trk-rep{padding:6px 12px;border-radius:999px;font-size:13px}
+  .trk-rep.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .trk{display:flex;flex-direction:column;gap:14px}
+  .trk-title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .trk-title b{font-size:16px}
+  .trk-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px}
+  .kpi{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:1px}
+  .kpi .kv{font-size:22px;font-weight:700;line-height:1.1}
+  .kpi .kl{font-size:12px;color:var(--muted)}
+  .kpi .ks{font-size:11px;color:var(--muted);opacity:.8}
+  .trk-targets{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .trk-th{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .trk-tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+  .trk-tg{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+  .trk-tg span{font-size:13px;color:var(--muted)}
+  .trk-tg input{width:58px;text-align:right;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);padding:4px 6px;font:inherit}
+  .trk-tg.ro b{font-weight:700}
+  .trk-tg.stretch{border-style:dashed}
+  .trk-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+  .trk-table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+  .trk-table th,.trk-table td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line)}
+  .trk-table thead th{position:sticky;top:0;background:var(--panel2);font-weight:600;font-size:12px;color:var(--muted)}
+  .trk-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .trk-table td.b{font-weight:700}
+  .trk-table td.mut{color:var(--muted)}
+  .trk-table td.z{color:var(--line)}
+  .trk-table td.neg{color:#d6453a}
+  .trk-table td.pos{color:#1f9d55}
+  .trk-table tr.trk-0 td{color:var(--muted);opacity:.65}
+  .trk-table tr.trk-wk td{background:var(--panel2);font-weight:600;border-top:2px solid var(--line)}
+  .trk-st{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600}
+  .trk-st.ok{background:rgba(31,157,85,.16);color:#1f9d55}
+  .trk-st.low{background:rgba(214,69,58,.16);color:#d6453a}
+  .trk-st.stretch{background:var(--accent-soft);color:var(--accent)}
+  .trk-st.none{background:var(--panel2);color:var(--muted)}
+  .trk-togrow{margin:10px 0 4px}
+  .trk-toggle.on{background:var(--accent-soft);border-color:var(--accent)}`;
+  document.head.appendChild(st);
+})();
+
 /* ---------- list ---------- */
 function counts(){ const bl = boardLeads(); const c = { all: bl.length }; for (const l of bl) c[stage(l)] = (c[stage(l)] || 0) + 1; c.sales = salesLeads().length; return c; }
 function renderTabs(){
@@ -552,17 +707,20 @@ function renderTabs(){
       h("span", { class:"stat" }, h("b", { text: String(s.total) }), " total"),
       h("span", { class:"stat" }, h("b", { text: String(s.today) }), " today"),
       h("span", { class:"stat" }, h("b", { text: String(s.week) }), " this week")));
-    const prow = h("div", { class:"plattabs" });
-    prow.append(h("button", { type:"button", class:"ptab" + (!salesPlat ? " on" : ""), onclick:() => setSalesPlat(null) }, "All ", h("b", { text: String(leads.length) })));
-    for (const p of platTabs(leads)) prow.append(h("button", { type:"button", class:"ptab" + (salesPlat && salesPlat.key === p.key ? " on" : ""), onclick:() => setSalesPlat({ key: p.key, name: p.name }) }, p.name + " ", h("b", { text: String(p.count) })));
-    prow.append(h("button", { type:"button", class:"ptab add", onclick: addPlatPrompt }, "+ Add"));
-    wrap.append(prow);
-    wrap.append(h("p", { class:"hint platnote", text: salesPlat ? "New screenshots get logged as " + salesPlat.name + ". Tap All for auto-detect." : "Platform is auto-detected per screenshot. Tap one to log everything as that platform." }));
+    wrap.append(h("div", { class:"trk-togrow" }, h("button", { type:"button", class:"trk-toggle" + (salesTrackOpen ? " on" : ""), onclick:() => { salesTrackOpen = !salesTrackOpen; render(); } }, salesTrackOpen ? "← Back to outreach" : "📊 My daily tracker")));
+    if (!salesTrackOpen){
+      const prow = h("div", { class:"plattabs" });
+      prow.append(h("button", { type:"button", class:"ptab" + (!salesPlat ? " on" : ""), onclick:() => setSalesPlat(null) }, "All ", h("b", { text: String(leads.length) })));
+      for (const p of platTabs(leads)) prow.append(h("button", { type:"button", class:"ptab" + (salesPlat && salesPlat.key === p.key ? " on" : ""), onclick:() => setSalesPlat({ key: p.key, name: p.name }) }, p.name + " ", h("b", { text: String(p.count) })));
+      prow.append(h("button", { type:"button", class:"ptab add", onclick: addPlatPrompt }, "+ Add"));
+      wrap.append(prow);
+      wrap.append(h("p", { class:"hint platnote", text: salesPlat ? "New screenshots get logged as " + salesPlat.name + ". Tap All for auto-detect." : "Platform is auto-detected per screenshot. Tap one to log everything as that platform." }));
+    }
     nav.append(wrap);
     return;
   }
-  const c = counts(), tabs = [...STAGES, ["sales","Sales"]];
-  for (const [k, label] of tabs) nav.append(h("button", { type:"button", class:"tab" + (k === "due" ? " due" : "") + (k === "sales" ? " salest" : ""), "aria-pressed": String(filter === k), onclick:() => { filter = k; render(); } }, label, h("b", { text: String(c[k] || 0) })));
+  const c = counts(), tabs = [...STAGES, ["sales","Sales"], ["tracker","Tracker"]];
+  for (const [k, label] of tabs) nav.append(h("button", { type:"button", class:"tab" + (k === "due" ? " due" : "") + (k === "sales" ? " salest" : "") + (k === "tracker" ? " trackt" : ""), "aria-pressed": String(filter === k), onclick:() => { filter = k; render(); } }, label, k === "tracker" ? null : h("b", { text: String(c[k] || 0) })));
 }
 function visible(){
   const qq = q.toLowerCase();
@@ -584,6 +742,8 @@ function render(){
     empty.append(h("strong", { text: loadErr ? "Your leads can't be reached" : "Loading your leads…" }), loadErr ? h("span", { text: loadErr }) : null);
     return;
   }
+  const lh = $("search") && $("search").closest(".listhead"); if (lh) lh.hidden = false;
+  if ((!isSales() && filter === "tracker") || (isSales() && salesTrackOpen)){ renderTrackerView(list, empty); return; }
   if (!isSales() && filter === "sales"){ renderSalesView(list, empty); return; }
   const v = isSales() ? salesVisible() : visible();
   if (!v.length){
@@ -1190,7 +1350,7 @@ async function onUser(u){
     render();
     if (openId && sheetMode === "lead") syncSheet();
   }, e => { clearTimeout(timer); loadErr = errText(e); render(); });
-  unsubSet = F.onSnapshot(F.doc(fs, "settings", "main"), s => { if (s.exists() && sheetMode !== "settings") S = { ...DEF, ...s.data() }; }, () => {});
+  unsubSet = F.onSnapshot(F.doc(fs, "settings", "main"), s => { if (s.exists() && sheetMode !== "settings" && Date.now() - setBusy > 2500){ S = { ...DEF, ...s.data() }; render(); } }, () => {});
   const sessQuery = isSales() ? F.query(F.collection(fs, "sessions"), F.where("ownerEmail", "==", myEmail)) : F.collection(fs, "sessions");
   unsubSessions = F.onSnapshot(sessQuery, snap => { sessions = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, () => {});
 }
