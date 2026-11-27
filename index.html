@@ -1101,7 +1101,8 @@ function cleanLead(r){
     name: str(r.name, 140), kind: r.kind === "job" ? "job" : "business", source: str(r.source, 40), platform: pk, platName: str(r.platName, 30) || PLAT_LABEL[pk] || "Other",
     niche: str(r.niche, 80), location: str(r.location, 100), whatsapp, phone: str(r.phone, 40), email,
     profile: str(r.profile, 240), username: str(r.username, 80), channel, subject: str(r.subject, 200), message: str(r.message, 6000),
-    notes: str(r.notes, 1200), status: "new", createdAt: Date.now(), createdBy: meName, ownerEmail: myEmail, track: isSales() ? "sales" : "team", sentAt: null, sentBy: null, followUpAt: null, followUps: 0, followMsg: ""
+    notes: str(r.notes, 1200), status: "new", createdAt: Date.now(), createdBy: meName, ownerEmail: myEmail, track: isSales() ? "sales" : "team", sentAt: null, sentBy: null, followUpAt: null, followUps: 0, followMsg: "",
+    ...(r.shotHash ? { shotHash: str(r.shotHash, 80) } : {})
   };
 }
 let reading = false;
@@ -1131,14 +1132,22 @@ async function readShots(files){
 }
 // Sales rep: read EVERY person in each screenshot and log each as a separate outreach.
 const fatal = e => e && (e.code === "permission-denied" || /RESOURCE_EXHAUSTED|SERVICE_DISABLED|app.?check|attestation/i.test(String(e.message)));
+async function shotHashOf(file){
+  try { const buf = await file.arrayBuffer(); const d = await crypto.subtle.digest("SHA-256", buf); return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, "0")).join(""); }
+  catch (e){ return ""; }
+}
 async function readShotsSales(files){
   files = [...files].filter(f => /^image\//.test(f.type));
   if (!files.length){ toast("Those aren't images. Drop screenshots (PNG or JPG)."); return; }
   if (reading){ toast("Still reading the last screenshot. One moment."); return; }
   reading = true;
   const list = files.slice(0, 10), seen = new Set(leads.map(x => (x.username || x.name || "").toLowerCase()).filter(Boolean));
+  // Every screenshot already logged (by this device or anyone's saved leads) — so the same shot can't be counted twice.
+  const shots = new Set([...leads.map(l => l.shotHash).filter(Boolean), ...loadLS("fwo_shots", [])]);
   for (let i = 0; i < list.length; i++){
     const qi = addQ(list.length > 1 ? `Reading screenshot ${i + 1} of ${list.length}…` : "Reading the screenshot…");
+    const hash = await shotHashOf(list[i]);
+    if (hash && shots.has(hash)){ qi.err("You already logged this screenshot — it won't be counted again."); continue; }
     try {
       const r = await aiJSON(salesPrompt(), [list[i]], () => qi.note("Google is busy, trying again…"));
       // If the rep chose a platform tab, tag with it; otherwise auto-detect from the screenshot.
@@ -1150,10 +1159,11 @@ async function readShotsSales(files){
         const nm = str(c && c.name, 140), un = str(c && c.username, 80);
         if (!nm && !un) continue;
         const key = (un || nm).toLowerCase(); if (seen.has(key)) continue; seen.add(key);
-        try { await F.addDoc(F.collection(fs, "leads"), cleanLead({ name: nm, username: un, niche: c.niche, location: c.location, source: r && r.platform, platformKey: pKey, platName: pName })); added++; }
+        try { await F.addDoc(F.collection(fs, "leads"), cleanLead({ name: nm, username: un, niche: c.niche, location: c.location, source: r && r.platform, platformKey: pKey, platName: pName, shotHash: hash })); added++; }
         catch (e){ if (fatal(e)){ qi.err(errText(e)); stop = true; break; } }
       }
-      qi.done(added ? `Logged ${added} ${added === 1 ? "contact" : "contacts"} · ${pName}` : "No new contacts found");
+      if (hash){ shots.add(hash); const cache = loadLS("fwo_shots", []); cache.push(hash); saveLS("fwo_shots", cache.slice(-300)); }
+      qi.done(added ? `Logged ${added} ${added === 1 ? "contact" : "contacts"} · ${pName}` : (hash ? "Already logged — nothing new" : "No new contacts found"));
       if (stop) break;
     } catch (e){ qi.err(errText(e)); if (fatal(e)) break; }
   }
