@@ -685,6 +685,68 @@ function saveSettingsSoon(){ clearTimeout(saveSetT); saveSetT = setTimeout(async
 
 /* ---------- list ---------- */
 function counts(){ const bl = boardLeads(); const c = { all: bl.length }; for (const l of bl) c[stage(l)] = (c[stage(l)] || 0) + 1; c.sales = salesLeads().length; return c; }
+/* ---------- sales onboarding guide (animated walkthrough) ---------- */
+let _guideShown = false;
+const SALES_GUIDE = [
+  { icon: "▶️", title: "Clock in first", body: "Tap “Start working” when you begin. It times your session and counts everything you log — so your effort is always on record." },
+  { icon: "💬", title: "Message prospects", body: "Reach out to potential clients on Instagram, Threads, Gmail, LinkedIn, Twitter / X or Discord — however you normally do." },
+  { icon: "📸", title: "Screenshot who you messaged", body: "Take a screenshot showing the people or chats you reached out to. One with many people is perfect — a DM list, a Sent folder, a chat list." },
+  { icon: "📥", title: "Drop it in — it logs itself", body: "Add your screenshot(s) here (up to 10 at once). It reads every name and @handle and logs them automatically, sorted by platform. No typing." },
+  { icon: "🛡️", title: "No double-counting", body: "The same screenshot can’t be logged twice, and anyone you already logged is skipped — so your numbers are always honest." },
+  { icon: "📊", title: "Watch your progress", body: "Tap “My daily tracker” to see how many you’ve done today vs your target, by platform. Tap “Stop working” when you’re done." },
+];
+function showSalesGuide(i){
+  let m = document.getElementById("guideModal");
+  if (!m){
+    m = document.createElement("div"); m.id = "guideModal"; m.className = "guide-ov";
+    m.innerHTML = '<div class="guide-card"><button type="button" class="guide-x" aria-label="Close">×</button><div class="guide-stage"></div><div class="guide-dots"></div><div class="guide-nav"><button type="button" class="guide-back">Back</button><button type="button" class="guide-next">Next</button></div></div>';
+    document.body.appendChild(m);
+    m.querySelector(".guide-x").onclick = closeSalesGuide;
+    m.addEventListener("click", (e) => { if (e.target === m) closeSalesGuide(); });
+  }
+  const idx = Math.max(0, Math.min(SALES_GUIDE.length - 1, i || 0)), s = SALES_GUIDE[idx];
+  const stage = m.querySelector(".guide-stage");
+  stage.classList.remove("in"); void stage.offsetWidth;
+  stage.innerHTML = '<div class="guide-icon"></div><h3 class="guide-title"></h3><p class="guide-body"></p>';
+  stage.querySelector(".guide-icon").textContent = s.icon;
+  stage.querySelector(".guide-title").textContent = s.title;
+  stage.querySelector(".guide-body").textContent = s.body;
+  stage.classList.add("in");
+  const dots = m.querySelector(".guide-dots"); dots.textContent = "";
+  SALES_GUIDE.forEach((_, j) => { const d = document.createElement("span"); d.className = "guide-dot" + (j === idx ? " on" : ""); d.onclick = () => showSalesGuide(j); dots.appendChild(d); });
+  const back = m.querySelector(".guide-back"), next = m.querySelector(".guide-next"), last = idx === SALES_GUIDE.length - 1;
+  back.style.visibility = idx === 0 ? "hidden" : "visible";
+  back.onclick = () => showSalesGuide(idx - 1);
+  next.textContent = last ? "Got it! 🚀" : "Next";
+  next.onclick = last ? closeSalesGuide : () => showSalesGuide(idx + 1);
+}
+function closeSalesGuide(){ const m = document.getElementById("guideModal"); if (m) m.remove(); saveLS("fwo_guide_seen", true); }
+(function guideCss(){
+  if (document.getElementById("guidecss")) return;
+  const st = document.createElement("style"); st.id = "guidecss";
+  st.textContent = `
+  .guide-ov{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px;animation:gfade .2s ease}
+  @keyframes gfade{from{opacity:0}to{opacity:1}}
+  .guide-card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 22px 18px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .guide-x{position:absolute;top:10px;right:12px;background:transparent;border:0;color:var(--muted);font-size:24px;line-height:1;cursor:pointer;padding:4px}
+  .guide-stage{text-align:center;min-height:208px;opacity:0;transform:translateY(8px)}
+  .guide-stage.in{opacity:1;transform:none;transition:opacity .28s ease,transform .28s ease}
+  .guide-icon{font-size:52px;line-height:1;margin:6px 0 14px;display:inline-block;animation:gpop .45s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes gpop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+  .guide-title{margin:0 0 8px;font-size:19px;color:var(--fg)}
+  .guide-body{margin:0 auto;max-width:300px;font-size:14px;line-height:1.5;color:var(--muted)}
+  .guide-dots{display:flex;gap:6px;justify-content:center;margin:16px 0 14px}
+  .guide-dot{width:7px;height:7px;border-radius:50%;background:var(--line);cursor:pointer;transition:all .2s}
+  .guide-dot.on{background:var(--accent);width:20px;border-radius:4px}
+  .guide-nav{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .guide-back{background:transparent;border:0;color:var(--muted);cursor:pointer;font:inherit;padding:8px}
+  .guide-next{background:var(--accent);border:0;color:var(--accent-fg);font-weight:700;padding:10px 20px;border-radius:12px;cursor:pointer;font:inherit}
+  .guide-row{margin:2px 0}
+  .guide-btn{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
+  .guide-btn:hover{border-color:var(--accent);color:var(--accent)}`;
+  document.head.appendChild(st);
+})();
+
 function renderTabs(){
   const nav = $("tabs"); nav.textContent = "";
   if (isSales()){
@@ -707,6 +769,8 @@ function renderTabs(){
       h("span", { class:"stat" }, h("b", { text: String(s.total) }), " total"),
       h("span", { class:"stat" }, h("b", { text: String(s.today) }), " today"),
       h("span", { class:"stat" }, h("b", { text: String(s.week) }), " this week")));
+    wrap.append(h("div", { class:"guide-row" }, h("button", { type:"button", class:"guide-btn", onclick:() => showSalesGuide(0) }, "ⓘ How it works")));
+    if (!_guideShown && !loadLS("fwo_guide_seen", false)){ _guideShown = true; setTimeout(() => showSalesGuide(0), 500); }
     wrap.append(h("div", { class:"trk-togrow" }, h("button", { type:"button", class:"trk-toggle" + (salesTrackOpen ? " on" : ""), onclick:() => { salesTrackOpen = !salesTrackOpen; render(); } }, salesTrackOpen ? "← Back to outreach" : "📊 My daily tracker")));
     if (!salesTrackOpen){
       const prow = h("div", { class:"plattabs" });
@@ -1003,13 +1067,20 @@ ${RULES()}
 
 ${JSON_SHAPE()}`;
 // A sales rep only logs who they reached — no pitch — so a light, fast read of just the name + handle.
-const salesPrompt = () => `This screenshot is from a salesperson's outreach. It may be a single profile or chat, OR a list with MANY people — an email "Sent" folder, a DM list, search results, a followers list. Find EVERY distinct person or business shown.
-First decide which platform the screenshot is from.
+const salesPrompt = () => `This screenshot is from a salesperson's outreach. It may be a single profile or chat, OR a list with MANY people — an email "Sent" folder, a DM list, a chat/message list, search results, or a followers/members list. Find EVERY distinct person or business shown.
+First decide which platform the screenshot is from, by how it looks:
+- Gmail / email: subject lines and email addresses, a Sent or inbox list, or a compose window.
+- Instagram: a DM list, or a profile with an @handle and follower counts.
+- Threads: like Instagram with @handles and the word "Threads".
+- LinkedIn: a job title / company under each name, "Message" or connection wording.
+- Twitter / X: @handles, the X or bird logo, a DM conversation list.
+- Discord: a dark sidebar of usernames or servers, #channels, or a DM list of usernames.
+- Facebook / Messenger, TikTok, or WhatsApp only if clearly those.
 Reply with only one JSON object, no other text:
-{"platform": "Gmail" | "LinkedIn" | "Instagram" | "Threads" | "Twitter" | "Facebook" | "TikTok" | "WhatsApp" | "Other", "contacts": [{"name": "person or business name, or empty", "username": "their @handle, email, or username if shown, or empty", "niche": "what they do in 2-4 words, or empty", "location": "city or country if shown, or empty"}]}
+{"platform": "Gmail" | "LinkedIn" | "Instagram" | "Threads" | "Twitter" | "Discord" | "Facebook" | "TikTok" | "WhatsApp" | "Other", "contacts": [{"name": "person or business name, or empty", "username": "their @handle, email, or username if shown, or empty", "niche": "what they do in 2-4 words, or empty", "location": "city or country if shown, or empty"}]}
 Put one entry in "contacts" for EACH distinct person/business you can see — if the screenshot shows 8 sent emails, return all 8. Copy names, @handles and emails exactly as shown. Never guess or invent anyone. No message, no other fields.`;
 // Platforms a sales rep works, counted separately.
-const PLATFORMS = [["gmail","Gmail"],["linkedin","LinkedIn"],["instagram","Instagram"],["threads","Threads"],["twitter","Twitter / X"],["facebook","Facebook"],["tiktok","TikTok"],["whatsapp","WhatsApp"],["other","Other"]];
+const PLATFORMS = [["gmail","Gmail"],["linkedin","LinkedIn"],["instagram","Instagram"],["threads","Threads"],["twitter","Twitter / X"],["discord","Discord"],["facebook","Facebook"],["tiktok","TikTok"],["whatsapp","WhatsApp"],["other","Other"]];
 const PLAT_LABEL = Object.fromEntries(PLATFORMS);
 const platLabel = p => PLAT_LABEL[p] || "Other";
 function normPlatform(s){ s = String(s || "").toLowerCase().trim();
@@ -1020,6 +1091,7 @@ function normPlatform(s){ s = String(s || "").toLowerCase().trim();
   if (s.includes("twitter") || s === "x" || s.includes("tweet")) return "twitter";
   if (s.includes("facebook") || s === "fb" || s.includes("messenger")) return "facebook";
   if (s.includes("tiktok")) return "tiktok";
+  if (s.includes("discord")) return "discord";
   if (s.includes("whatsapp") || s === "wa") return "whatsapp";
   return "other";
 }
