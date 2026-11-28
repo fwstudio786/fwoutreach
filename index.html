@@ -685,64 +685,73 @@ function saveSettingsSoon(){ clearTimeout(saveSetT); saveSetT = setTimeout(async
 
 /* ---------- list ---------- */
 function counts(){ const bl = boardLeads(); const c = { all: bl.length }; for (const l of bl) c[stage(l)] = (c[stage(l)] || 0) + 1; c.sales = salesLeads().length; return c; }
-/* ---------- sales onboarding guide (animated walkthrough) ---------- */
-let _guideShown = false;
-const SALES_GUIDE = [
-  { icon: "▶️", title: "Clock in first", body: "Tap “Start working” when you begin. It times your session and counts everything you log while you’re clocked in." },
-  { icon: "💬", title: "Message prospects", body: "Reach out to potential clients on Instagram, Threads, Gmail, LinkedIn, Twitter / X or Discord — however you normally do." },
-  { icon: "📸", title: "Screenshot who you messaged", body: "Take a screenshot showing the people or chats you reached out to. One with many people is perfect — a DM list, a Sent folder, a chat list." },
-  { icon: "📥", title: "Drop it in — it logs itself", body: "Add your screenshot(s) here, up to 10 at once. It reads every name and @handle and logs them automatically. No typing." },
-  { icon: "🏷️", title: "Platforms sort themselves", body: "It auto-detects the platform from each screenshot. Or tap a platform tab (Gmail, Instagram, Discord…) to log everything as that one. Don’t see your platform? Tap “+ Add” to add it." },
-  { icon: "🛡️", title: "No double-counting", body: "The same screenshot can’t be logged twice, and anyone you already logged is skipped — so your numbers are always honest." },
-  { icon: "🔎", title: "Your logged list", body: "Everyone you log shows up in your list below. Use the search box to find anyone by name or @handle." },
-  { icon: "📊", title: "Track your day", body: "Tap “My daily tracker” to see how many you’ve done today and this week vs your target, broken down by platform. Hit “Stop working” when you’re done." },
+/* ---------- sales onboarding tour (spotlights the real buttons) ---------- */
+let _guideShown = false, _tourI = 0;
+const TOUR = [
+  { sel: ".worksess", title: "1. Clock in", body: "Tap “Start working” when you begin. It times your session and counts everything you log while you’re clocked in." },
+  { sel: "#drop", title: "2. Add your screenshots here", body: "Tap to choose, drag & drop, or paste with Ctrl+V — up to 10 at once. It reads every name and @handle and logs them for you. No typing." },
+  { sel: ".plattabs", title: "3. Platforms", body: "The platform is auto-detected from each screenshot. Or tap one here (Gmail, Instagram, Discord…) to log everything as that platform. Tap “+ Add” for any that isn’t listed." },
+  { sel: ".statbar", title: "4. Your totals", body: "Your running counts — today, this week, and all time — update by themselves as you log." },
+  { sel: ".trk-toggle", title: "5. Daily tracker", body: "Tap here to see how you’re doing today vs your target, broken down by each platform." },
+  { sel: "#search", title: "6. Find anyone", body: "Everyone you log appears in your list below — search here by name or @handle to find someone fast." },
+  { sel: ".guide-btn", title: "7. Replay anytime", body: "Tap “ⓘ How it works” whenever you want to run through this tour again. That’s it — you’re set!" },
 ];
-function showSalesGuide(i){
-  let m = document.getElementById("guideModal");
-  if (!m){
-    m = document.createElement("div"); m.id = "guideModal"; m.className = "guide-ov";
-    m.innerHTML = '<div class="guide-card"><button type="button" class="guide-x" aria-label="Close">×</button><div class="guide-stage"></div><div class="guide-dots"></div><div class="guide-nav"><button type="button" class="guide-back">Back</button><button type="button" class="guide-next">Next</button></div></div>';
-    document.body.appendChild(m);
-    m.querySelector(".guide-x").onclick = closeSalesGuide;
-    m.addEventListener("click", (e) => { if (e.target === m) closeSalesGuide(); });
+function startTour(i){
+  _tourI = i || 0;
+  let ov = document.getElementById("tourOv");
+  if (!ov){
+    ov = document.createElement("div"); ov.id = "tourOv"; ov.className = "tour-ov";
+    ov.innerHTML = '<div class="tour-hole"></div><div class="tour-tip"><div class="tour-ttl"></div><div class="tour-bd"></div><div class="tour-foot"><span class="tour-prog"></span><div class="tour-btns"><button type="button" class="tour-skip">Skip</button><button type="button" class="tour-back">Back</button><button type="button" class="tour-next">Next</button></div></div></div>';
+    document.body.appendChild(ov);
+    ov.querySelector(".tour-skip").onclick = endTour;
+    ov.querySelector(".tour-back").onclick = () => startTour(_tourI - 1);
+    ov.querySelector(".tour-next").onclick = () => { if (_tourI >= TOUR.length - 1) endTour(); else startTour(_tourI + 1); };
+    addEventListener("resize", _tourPos, { passive: true });
   }
-  const idx = Math.max(0, Math.min(SALES_GUIDE.length - 1, i || 0)), s = SALES_GUIDE[idx];
-  const stage = m.querySelector(".guide-stage");
-  stage.classList.remove("in"); void stage.offsetWidth;
-  stage.innerHTML = '<div class="guide-icon"></div><h3 class="guide-title"></h3><p class="guide-body"></p>';
-  stage.querySelector(".guide-icon").textContent = s.icon;
-  stage.querySelector(".guide-title").textContent = s.title;
-  stage.querySelector(".guide-body").textContent = s.body;
-  stage.classList.add("in");
-  const dots = m.querySelector(".guide-dots"); dots.textContent = "";
-  SALES_GUIDE.forEach((_, j) => { const d = document.createElement("span"); d.className = "guide-dot" + (j === idx ? " on" : ""); d.onclick = () => showSalesGuide(j); dots.appendChild(d); });
-  const back = m.querySelector(".guide-back"), next = m.querySelector(".guide-next"), last = idx === SALES_GUIDE.length - 1;
-  back.style.visibility = idx === 0 ? "hidden" : "visible";
-  back.onclick = () => showSalesGuide(idx - 1);
-  next.textContent = last ? "Got it! 🚀" : "Next";
-  next.onclick = last ? closeSalesGuide : () => showSalesGuide(idx + 1);
+  tourShow(false);
 }
-function closeSalesGuide(){ const m = document.getElementById("guideModal"); if (m) m.remove(); saveLS("fwo_guide_seen", true); }
-(function guideCss(){
-  if (document.getElementById("guidecss")) return;
-  const st = document.createElement("style"); st.id = "guidecss";
+function _tourPos(){ if (document.getElementById("tourOv")) tourShow(true); }
+function tourShow(keep){
+  const ov = document.getElementById("tourOv"); if (!ov) return;
+  _tourI = Math.max(0, Math.min(TOUR.length - 1, _tourI));
+  let el = document.querySelector(TOUR[_tourI].sel);
+  if (!el){ let j = _tourI; while (j < TOUR.length && !document.querySelector(TOUR[j].sel)) j++; if (j >= TOUR.length){ endTour(); return; } _tourI = j; el = document.querySelector(TOUR[_tourI].sel); }
+  if (!keep) try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {}
+  setTimeout(() => {
+    const t = document.querySelector(TOUR[_tourI].sel); if (!t) return;
+    const r = t.getBoundingClientRect(), pad = 8, vh = innerHeight, vw = innerWidth;
+    const hole = ov.querySelector(".tour-hole");
+    hole.style.top = (r.top - pad) + "px"; hole.style.left = (r.left - pad) + "px";
+    hole.style.width = (r.width + pad * 2) + "px"; hole.style.height = (r.height + pad * 2) + "px";
+    ov.querySelector(".tour-ttl").textContent = TOUR[_tourI].title;
+    ov.querySelector(".tour-bd").textContent = TOUR[_tourI].body;
+    ov.querySelector(".tour-prog").textContent = (_tourI + 1) + " / " + TOUR.length;
+    ov.querySelector(".tour-back").style.visibility = _tourI === 0 ? "hidden" : "visible";
+    ov.querySelector(".tour-next").textContent = _tourI === TOUR.length - 1 ? "Done 🚀" : "Next";
+    const tip = ov.querySelector(".tour-tip");
+    tip.style.visibility = "hidden"; tip.style.top = "0px"; tip.style.left = "0px";
+    const th = tip.offsetHeight, tw = tip.offsetWidth;
+    let top = r.bottom + pad + 10; if (top + th > vh - 10) top = Math.max(10, r.top - pad - 10 - th);
+    let left = Math.min(Math.max(10, r.left + r.width / 2 - tw / 2), vw - tw - 10);
+    tip.style.top = top + "px"; tip.style.left = left + "px"; tip.style.visibility = "visible";
+  }, keep ? 0 : 280);
+}
+function endTour(){ const ov = document.getElementById("tourOv"); if (ov) ov.remove(); removeEventListener("resize", _tourPos); try { saveLS("fwo_guide_seen", true); } catch (e) {} }
+(function tourCss(){
+  if (document.getElementById("tourcss")) return;
+  const st = document.createElement("style"); st.id = "tourcss";
   st.textContent = `
-  .guide-ov{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px;animation:gfade .2s ease}
-  @keyframes gfade{from{opacity:0}to{opacity:1}}
-  .guide-card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 22px 18px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-  .guide-x{position:absolute;top:10px;right:12px;background:transparent;border:0;color:var(--muted);font-size:24px;line-height:1;cursor:pointer;padding:4px}
-  .guide-stage{text-align:center;min-height:208px;opacity:0;transform:translateY(8px)}
-  .guide-stage.in{opacity:1;transform:none;transition:opacity .28s ease,transform .28s ease}
-  .guide-icon{font-size:52px;line-height:1;margin:6px 0 14px;display:inline-block;animation:gpop .45s cubic-bezier(.2,1.4,.4,1)}
-  @keyframes gpop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
-  .guide-title{margin:0 0 8px;font-size:19px;color:var(--fg)}
-  .guide-body{margin:0 auto;max-width:300px;font-size:14px;line-height:1.5;color:var(--muted)}
-  .guide-dots{display:flex;gap:6px;justify-content:center;margin:16px 0 14px}
-  .guide-dot{width:7px;height:7px;border-radius:50%;background:var(--line);cursor:pointer;transition:all .2s}
-  .guide-dot.on{background:var(--accent);width:20px;border-radius:4px}
-  .guide-nav{display:flex;justify-content:space-between;align-items:center;gap:10px}
-  .guide-back{background:transparent;border:0;color:var(--muted);cursor:pointer;font:inherit;padding:8px}
-  .guide-next{background:var(--accent);border:0;color:var(--accent-fg);font-weight:700;padding:10px 20px;border-radius:12px;cursor:pointer;font:inherit}
+  .tour-ov{position:fixed;inset:0;z-index:10001;pointer-events:auto}
+  .tour-hole{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.72),0 0 0 2px var(--accent),0 0 22px 5px rgba(226,86,26,.55);transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease;pointer-events:none}
+  .tour-tip{position:fixed;max-width:300px;width:calc(100vw - 32px);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 16px 44px rgba(0,0,0,.55);pointer-events:auto;transition:top .2s ease,left .2s ease}
+  .tour-ttl{font-weight:700;font-size:16px;color:var(--fg);margin-bottom:5px}
+  .tour-bd{font-size:13.5px;line-height:1.5;color:var(--muted)}
+  .tour-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px}
+  .tour-prog{font-size:12px;color:var(--muted)}
+  .tour-btns{display:flex;gap:6px;align-items:center}
+  .tour-skip{background:transparent;border:0;color:var(--muted);font:inherit;cursor:pointer;padding:6px 8px}
+  .tour-back{background:transparent;border:1px solid var(--line);color:var(--fg);font:inherit;cursor:pointer;padding:6px 12px;border-radius:9px}
+  .tour-next{background:var(--accent);border:0;color:var(--accent-fg);font-weight:700;font:inherit;cursor:pointer;padding:7px 16px;border-radius:9px}
   .guide-row{margin:2px 0}
   .guide-btn{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
   .guide-btn:hover{border-color:var(--accent);color:var(--accent)}`;
@@ -771,8 +780,8 @@ function renderTabs(){
       h("span", { class:"stat" }, h("b", { text: String(s.total) }), " total"),
       h("span", { class:"stat" }, h("b", { text: String(s.today) }), " today"),
       h("span", { class:"stat" }, h("b", { text: String(s.week) }), " this week")));
-    wrap.append(h("div", { class:"guide-row" }, h("button", { type:"button", class:"guide-btn", onclick:() => showSalesGuide(0) }, "ⓘ How it works")));
-    if (!_guideShown && !loadLS("fwo_guide_seen", false)){ _guideShown = true; setTimeout(() => showSalesGuide(0), 500); }
+    wrap.append(h("div", { class:"guide-row" }, h("button", { type:"button", class:"guide-btn", onclick:() => startTour(0) }, "ⓘ How it works")));
+    if (!_guideShown && !loadLS("fwo_guide_seen", false)){ _guideShown = true; setTimeout(() => startTour(0), 500); }
     wrap.append(h("div", { class:"trk-togrow" }, h("button", { type:"button", class:"trk-toggle" + (salesTrackOpen ? " on" : ""), onclick:() => { salesTrackOpen = !salesTrackOpen; render(); } }, salesTrackOpen ? "← Back to outreach" : "📊 My daily tracker")));
     if (!salesTrackOpen){
       const prow = h("div", { class:"plattabs" });
