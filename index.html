@@ -688,12 +688,14 @@ function counts(){ const bl = boardLeads(); const c = { all: bl.length }; for (c
 /* ---------- sales onboarding guide (animated walkthrough) ---------- */
 let _guideShown = false;
 const SALES_GUIDE = [
-  { icon: "▶️", title: "Clock in first", body: "Tap “Start working” when you begin. It times your session and counts everything you log — so your effort is always on record." },
+  { icon: "▶️", title: "Clock in first", body: "Tap “Start working” when you begin. It times your session and counts everything you log while you’re clocked in." },
   { icon: "💬", title: "Message prospects", body: "Reach out to potential clients on Instagram, Threads, Gmail, LinkedIn, Twitter / X or Discord — however you normally do." },
   { icon: "📸", title: "Screenshot who you messaged", body: "Take a screenshot showing the people or chats you reached out to. One with many people is perfect — a DM list, a Sent folder, a chat list." },
-  { icon: "📥", title: "Drop it in — it logs itself", body: "Add your screenshot(s) here (up to 10 at once). It reads every name and @handle and logs them automatically, sorted by platform. No typing." },
+  { icon: "📥", title: "Drop it in — it logs itself", body: "Add your screenshot(s) here, up to 10 at once. It reads every name and @handle and logs them automatically. No typing." },
+  { icon: "🏷️", title: "Platforms sort themselves", body: "It auto-detects the platform from each screenshot. Or tap a platform tab (Gmail, Instagram, Discord…) to log everything as that one. Don’t see your platform? Tap “+ Add” to add it." },
   { icon: "🛡️", title: "No double-counting", body: "The same screenshot can’t be logged twice, and anyone you already logged is skipped — so your numbers are always honest." },
-  { icon: "📊", title: "Watch your progress", body: "Tap “My daily tracker” to see how many you’ve done today vs your target, by platform. Tap “Stop working” when you’re done." },
+  { icon: "🔎", title: "Your logged list", body: "Everyone you log shows up in your list below. Use the search box to find anyone by name or @handle." },
+  { icon: "📊", title: "Track your day", body: "Tap “My daily tracker” to see how many you’ve done today and this week vs your target, broken down by platform. Hit “Stop working” when you’re done." },
 ];
 function showSalesGuide(i){
   let m = document.getElementById("guideModal");
